@@ -1,9 +1,18 @@
 """
 HubSpot integration service.
 
-Fetches meeting links via the Scheduler v3 API and syncs them to the local
-database, preserving all admin-managed overrides (display_name, category,
-host_override_locked, image_path, sort_order).
+Sync strategy
+-------------
+1. Pre-fetch every owner from /crm/v3/owners — builds two lookup dicts
+   keyed by owner-id and by user-id so we can resolve whichever reference
+   the meeting-links endpoint happens to use (organizerUserId, ownerId, …).
+2. Fetch all meeting links from /scheduler/v3/meetings/meeting-links.
+3. For each link resolve its owner → find-or-create a MeetingHost row.
+4. Insert new links, refresh mutable HubSpot fields on existing ones.
+5. Respect admin overrides:
+   - display_name, category_id, image_path, sort_order are never touched.
+   - host_id is only updated when host_override_locked is False.
+6. Soft-delete links no longer returned by HubSpot.
 """
 import logging
 from datetime import datetime, timezone
@@ -29,30 +38,106 @@ _HEADERS = {
 # HubSpot API helpers
 # ---------------------------------------------------------------------------
 
-def _fetch_all_meeting_links() -> list[dict]:
-    """
-    Pages through the HubSpot Scheduler v3 meeting-links endpoint and returns
-    every link as a raw dict.
-    """
-    url = f"{settings.HUBSPOT_API_BASE}/scheduler/v3/meetings/meeting-links"
-    params: dict = {"limit": 100}
-    all_links: list[dict] = []
+def _paginate(client: httpx.Client, url: str, params: dict) -> list[dict]:
+    """Generic paginator for HubSpot cursor-based endpoints."""
+    results: list[dict] = []
+    while True:
+        response = client.get(url, headers=_HEADERS, params=params)
+        response.raise_for_status()
+        data = response.json()
+        results.extend(data.get("results", []))
+        after = data.get("paging", {}).get("next", {}).get("after")
+        if not after:
+            break
+        params = {**params, "after": after}
+    return results
 
+
+def _fetch_owners() -> tuple[dict[str, dict], dict[str, dict]]:
+    """
+    Fetch all (non-archived) HubSpot owners.
+
+    Returns two dicts for flexible lookup:
+      by_owner_id  — {owner["id"]     -> owner}
+      by_user_id   — {owner["userId"] -> owner}
+
+    An owner object looks like:
+      {"id": "12345", "email": "...", "firstName": "Jane", "lastName": "Doe",
+       "userId": 678900, "archived": false}
+    """
+    url = f"{settings.HUBSPOT_API_BASE}/crm/v3/owners"
     with httpx.Client(timeout=30.0) as client:
-        while True:
-            response = client.get(url, headers=_HEADERS, params=params)
-            response.raise_for_status()
-            data = response.json()
+        owners = _paginate(client, url, {"limit": 100, "archived": "false"})
 
-            all_links.extend(data.get("results", []))
+    by_owner_id: dict[str, dict] = {}
+    by_user_id: dict[str, dict] = {}
+    for o in owners:
+        oid = str(o.get("id", ""))
+        uid = str(o.get("userId", ""))
+        if oid:
+            by_owner_id[oid] = o
+        if uid and uid != "None":
+            by_user_id[uid] = o
 
-            after = data.get("paging", {}).get("next", {}).get("after")
-            if not after:
-                break
-            params = {"limit": 100, "after": after}
+    logger.info("Fetched %d HubSpot owners", len(by_owner_id))
+    return by_owner_id, by_user_id
 
-    logger.info("HubSpot returned %d meeting links", len(all_links))
-    return all_links
+
+def _fetch_all_meeting_links() -> list[dict]:
+    """Fetch every meeting link from the Scheduler v3 endpoint."""
+    url = f"{settings.HUBSPOT_API_BASE}/scheduler/v3/meetings/meeting-links"
+    with httpx.Client(timeout=30.0) as client:
+        links = _paginate(client, url, {"limit": 100})
+    logger.info("HubSpot returned %d meeting links", len(links))
+    return links
+
+
+def _resolve_owner(
+    hs_link: dict,
+    by_owner_id: dict[str, dict],
+    by_user_id: dict[str, dict],
+) -> Optional[dict]:
+    """
+    Try every known field name that HubSpot uses to reference the link owner.
+    Returns the owner dict from /crm/v3/owners, or None if not found.
+
+    Field names seen across HubSpot plans / API versions:
+      organizerUserId  — most common in Scheduler v3 (maps to owner.userId)
+      ownerId          — maps to owner.id
+      userId           — alias for organizerUserId on some plans
+    """
+    # Log the link keys on first call to help with debugging unknown fields
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Meeting link fields: %s", list(hs_link.keys()))
+
+    candidates = [
+        ("organizerUserId", by_user_id),
+        ("userId",          by_user_id),
+        ("ownerId",         by_owner_id),
+    ]
+    for field, lookup in candidates:
+        raw = hs_link.get(field)
+        if raw is not None:
+            owner = lookup.get(str(raw))
+            if owner:
+                logger.debug("Resolved owner via field '%s'=%s → %s %s",
+                             field, raw,
+                             owner.get("firstName", ""), owner.get("lastName", ""))
+                return owner
+            # Field exists but ID not in owners — log once at WARNING
+            logger.warning(
+                "Meeting link has %s=%s but no matching owner found. "
+                "Raw link data: %s",
+                field, raw, hs_link,
+            )
+    return None
+
+
+def _owner_display_name(owner: dict) -> str:
+    first = (owner.get("firstName") or "").strip()
+    last = (owner.get("lastName") or "").strip()
+    full = f"{first} {last}".strip()
+    return full or owner.get("email") or "Unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -65,26 +150,27 @@ def _get_or_create_host(
     name: str,
     email: Optional[str],
 ) -> MeetingHost:
-    """Return the existing MeetingHost for a HubSpot owner, creating one if absent."""
+    """Find an existing HubSpot-sourced MeetingHost or create one."""
     host = db.query(MeetingHost).filter(
-        MeetingHost.hubspot_owner_id == str(hubspot_owner_id)
+        MeetingHost.hubspot_owner_id == hubspot_owner_id
     ).first()
 
     if not host:
         host = MeetingHost(
-            name=name or "Unknown",
-            email=email or None,
-            hubspot_owner_id=str(hubspot_owner_id),
+            name=name,
+            email=email,
+            hubspot_owner_id=hubspot_owner_id,
             is_custom=False,
             is_active=True,
         )
         db.add(host)
         db.flush()
-        logger.info("Created new MeetingHost for HubSpot owner %s (%s)", hubspot_owner_id, name)
+        logger.info("Created MeetingHost '%s' (HubSpot owner %s)", name, hubspot_owner_id)
     else:
-        # Keep the name / email in sync for non-custom hosts
-        host.name = name or host.name
-        host.email = email or host.email
+        # Refresh name/email from HubSpot (non-custom hosts only)
+        if not host.is_custom:
+            host.name = name or host.name
+            host.email = email or host.email
 
     return host
 
@@ -98,62 +184,54 @@ def sync_meeting_links(
     triggered_by_id: Optional[int] = None,
 ) -> SyncLog:
     """
-    Full sync: fetch all meeting links from HubSpot and reconcile with the DB.
-
-    Rules:
-    - New links are inserted with auto-detected host, no category.
-    - Existing links: url / name / slug / link_type are refreshed.
-    - display_name, category_id, image_path, sort_order are NEVER touched.
-    - host_id is refreshed UNLESS host_override_locked == True.
-    - Links absent from HubSpot are soft-deleted (is_active = False).
+    Full sync. See module docstring for the complete strategy.
     """
     sync_log = SyncLog(status="running", triggered_by_id=triggered_by_id)
     db.add(sync_log)
     db.commit()
 
     try:
+        # Step 1 — build owner lookup tables
+        by_owner_id, by_user_id = _fetch_owners()
+
+        # Step 2 — fetch meeting links
         hs_links = _fetch_all_meeting_links()
 
         added = 0
         updated = 0
         seen_ids: set[str] = set()
+        now = datetime.now(timezone.utc)
 
         for hs in hs_links:
-            # HubSpot may expose the primary key as "id" or "slug"
-            link_id = str(hs.get("id") or hs.get("slug", "")).strip()
+            link_id = str(hs.get("id") or hs.get("slug") or "").strip()
             if not link_id:
-                logger.warning("Skipping HubSpot link with no id/slug: %s", hs)
+                logger.warning("Skipping link with no id/slug: %s", hs)
                 continue
 
             seen_ids.add(link_id)
 
-            # Extract owner fields — field names vary by HubSpot plan / version
-            owner_id = hs.get("ownerId") or hs.get("userId") or hs.get("portalId")
-            owner_name = (
-                hs.get("ownerName")
-                or hs.get("name")
-                or hs.get("ownerFirstName", "") + " " + hs.get("ownerLastName", "")
-            ).strip() or "Unknown"
-            owner_email = hs.get("ownerEmail") or hs.get("email") or None
-
-            link_url = (hs.get("link") or hs.get("url") or "").strip()
+            link_url  = (hs.get("link") or hs.get("url") or "").strip()
             link_name = (hs.get("name") or hs.get("slug") or link_id).strip()
             link_slug = (hs.get("slug") or "").strip() or None
             link_type = hs.get("type") or hs.get("linkType") or "PERSONAL_LINK"
 
-            # Resolve host
+            # Step 3 — resolve owner → host
             host: Optional[MeetingHost] = None
-            if owner_id:
-                host = _get_or_create_host(db, str(owner_id), owner_name, owner_email)
+            owner = _resolve_owner(hs, by_owner_id, by_user_id)
+            if owner:
+                host = _get_or_create_host(
+                    db,
+                    hubspot_owner_id=str(owner["id"]),
+                    name=_owner_display_name(owner),
+                    email=owner.get("email"),
+                )
 
             existing = db.query(MeetingLink).filter(
                 MeetingLink.hubspot_link_id == link_id
             ).first()
 
-            now = datetime.now(timezone.utc)
-
             if existing:
-                # Refresh only the HubSpot-sourced fields
+                # Refresh HubSpot-sourced fields only
                 existing.name = link_name
                 existing.url = link_url
                 existing.slug = link_slug
@@ -161,13 +239,13 @@ def sync_meeting_links(
                 existing.is_active = True
                 existing.last_synced_at = now
 
-                # Only reassign host when admin hasn't locked the assignment
+                # Respect admin host override
                 if not existing.host_override_locked and host:
                     existing.host_id = host.id
 
                 updated += 1
             else:
-                new_link = MeetingLink(
+                db.add(MeetingLink(
                     hubspot_link_id=link_id,
                     name=link_name,
                     url=link_url,
@@ -176,16 +254,15 @@ def sync_meeting_links(
                     host_id=host.id if host else None,
                     is_active=True,
                     last_synced_at=now,
-                )
-                db.add(new_link)
+                ))
                 added += 1
 
         db.flush()
 
-        # Soft-delete links no longer returned by HubSpot
+        # Step 6 — soft-delete links no longer in HubSpot
         deactivated = 0
         if seen_ids:
-            result = (
+            gone = (
                 db.query(MeetingLink)
                 .filter(
                     MeetingLink.hubspot_link_id.isnot(None),
@@ -194,7 +271,7 @@ def sync_meeting_links(
                 )
                 .all()
             )
-            for link in result:
+            for link in gone:
                 link.is_active = False
                 deactivated += 1
 

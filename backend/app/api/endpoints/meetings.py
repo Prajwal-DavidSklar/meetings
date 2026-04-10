@@ -229,6 +229,40 @@ def trigger_sync(
 
 
 @router.get(
+    "/sync/debug-raw",
+    summary="[Admin] Show raw HubSpot API response for the first meeting link",
+    response_model=dict,
+)
+def debug_raw_hubspot(
+    _: User = Depends(require_admin),
+):
+    """
+    Returns the raw JSON of the first meeting link and first owner from HubSpot
+    so you can see exactly which field names are present on your plan.
+    Remove or restrict this endpoint once the sync is confirmed working.
+    """
+    import httpx
+    from app.services.hubspot_service import _HEADERS, _paginate
+
+    result: dict = {}
+    with httpx.Client(timeout=30.0) as client:
+        links = _paginate(
+            client,
+            f"{settings.HUBSPOT_API_BASE}/scheduler/v3/meetings/meeting-links",
+            {"limit": 1},
+        )
+        owners = _paginate(
+            client,
+            f"{settings.HUBSPOT_API_BASE}/crm/v3/owners",
+            {"limit": 1, "archived": "false"},
+        )
+
+    result["sample_meeting_link"] = links[0] if links else None
+    result["sample_owner"] = owners[0] if owners else None
+    return result
+
+
+@router.get(
     "/sync/logs",
     response_model=List[SyncLogResponse],
     summary="List HubSpot sync history",

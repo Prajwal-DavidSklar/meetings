@@ -1,57 +1,48 @@
 # backend/main.py
 import uvicorn
+import logging
+import traceback
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
-import logging
-import traceback
-from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# Import database initialization functions
 from app.db.init_db import init_db, close_db_connections
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Lifespan context manager for the FastAPI app
-    Handles startup and shutdown events
-    """
-    # Startup: Initialize databases
     logger.info("Starting up application...")
     try:
         await init_db()
-        logger.info("Database initialization completed successfully")
+        logger.info("Database initialisation completed successfully")
     except Exception as e:
-        logger.error(f"Database initialization failed: {e}")
+        logger.error("Database initialisation failed: %s", e)
         logger.error(traceback.format_exc())
-        # We don't re-raise the exception because we want the application to start
-        # even if database initialization fails. The endpoints will handle the errors.
-    
+
     yield
-    
-    # Shutdown: Close database connections
+
     logger.info("Shutting down application...")
     try:
         await close_db_connections()
         logger.info("Database connections closed successfully")
     except Exception as e:
-        logger.error(f"Error closing database connections: {e}")
-        logger.error(traceback.format_exc())
+        logger.error("Error closing database connections: %s", e)
 
 
 def create_main_application() -> FastAPI:
-    """Create the main application with api endpoints."""
     from app.core.settings import get_settings
     settings = get_settings()
-    
+
     app = FastAPI(
         title=settings.PROJECT_NAME,
         description=settings.PROJECT_DESCRIPTION,
@@ -60,51 +51,53 @@ def create_main_application() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
-    
-    # Set up CORS
+
+    # CORS — tighten origins in production via settings.FRONTEND_URL
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=[settings.FRONTEND_URL, "http://localhost:3000", "http://localhost:3001"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
-    # Add global exception handler for database errors
+
+    # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
-        logger.error(f"Unhandled exception: {exc}")
+        logger.error("Unhandled exception: %s", exc)
         logger.error(traceback.format_exc())
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "Internal server error"},
         )
-    
-    # Import and include API router
+
+    # API routes
     from app.api.router import api_router
     app.include_router(api_router)
-    
-    # Add health check endpoint
+
+    # Serve uploaded images at /uploads/…
+    uploads_dir = settings.UPLOADS_DIR
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+
+    # Health check
     @app.get("/health", tags=["health"])
     async def health_check():
-        """Health check endpoint"""
         return {"status": "healthy"}
-    
+
     return app
 
 
-# Create the main application
 app = create_main_application()
 
 
 if __name__ == "__main__":
-    # Check for SSL certificates in the certificates directory
     cert_dir = Path(__file__).parent / "certificates"
     cert_file = cert_dir / "localhost.pem"
     key_file = cert_dir / "localhost-key.pem"
 
     if cert_file.exists() and key_file.exists():
-        logger.info(f"SSL certificates found in {cert_dir}, starting HTTPS server")
+        logger.info("SSL certificates found — starting HTTPS server")
         uvicorn.run(
             "main:app",
             host="0.0.0.0",
@@ -114,5 +107,5 @@ if __name__ == "__main__":
             ssl_keyfile=str(key_file),
         )
     else:
-        logger.info("No SSL certificates found, starting HTTP server")
+        logger.info("No SSL certificates found — starting HTTP server")
         uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

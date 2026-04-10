@@ -5,4 +5,15 @@ pydantic-settings>=2.0.0
 sqlalchemy>=2.0.0
 python-dotenv>=1.0.0
 python-multipart>=0.0.6
-aiosqlite>=0.19.0  # Async SQLite support
+aiosqlite>=0.19.0
+
+# Auth
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.0.0
+msal>=1.24.0
+
+# HTTP client for HubSpot API
+httpx>=0.24.0
+
+# File handling
+aiofiles>=23.1.0

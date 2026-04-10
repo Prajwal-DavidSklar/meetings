@@ -55,7 +55,7 @@ def create_main_application() -> FastAPI:
     # CORS — tighten origins in production via settings.FRONTEND_URL
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.FRONTEND_URL, "http://localhost:3000", "http://localhost:3001"],
+        allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

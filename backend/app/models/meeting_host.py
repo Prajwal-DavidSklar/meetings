@@ -14,6 +14,7 @@ class MeetingHost(Base):
     hubspot_owner_id = Column(String, unique=True, nullable=True, index=True)
     is_custom = Column(Boolean, default=False, nullable=False) # True = admin-created, not from HubSpot
     is_active = Column(Boolean, default=True, nullable=False)
+    image_path = Column(String, nullable=True)                 # Admin-uploaded profile photo
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

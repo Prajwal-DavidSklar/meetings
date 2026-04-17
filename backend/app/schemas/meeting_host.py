@@ -24,6 +24,7 @@ class MeetingHostResponse(BaseModel):
     hubspot_owner_id: Optional[str] = None
     is_custom: bool
     is_active: bool
+    image_path: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

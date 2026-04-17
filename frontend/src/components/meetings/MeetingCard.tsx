@@ -1,171 +1,118 @@
 "use client";
 
+import { useState } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
-import { Calendar, User, ExternalLink } from "lucide-react";
+import { Calendar, User } from "lucide-react";
 import type { MeetingLink } from "@/lib/types";
-import { UPLOADS_BASE } from "@/lib/api";
+import { assetUrl } from "@/lib/api";
 
-interface Props {
+interface MeetingCardProps {
   meeting: MeetingLink;
-  onBook: (meeting: MeetingLink) => void;
-  index?: number;
+  onClick: () => void;
 }
 
-export default function MeetingCard({ meeting, onBook, index = 0 }: Props) {
-  const displayName = meeting.display_name ?? meeting.name;
-  const hostName = meeting.host?.display_name ?? meeting.host?.name;
-  const categoryName = meeting.category?.name;
-  const categoryColor = meeting.category?.color;
-  const imageUrl = meeting.image_path ? `${UPLOADS_BASE}${meeting.image_path}` : null;
+export default function MeetingCard({ meeting, onClick }: MeetingCardProps) {
+  const [imgError, setImgError] = useState(false);
+
+  const title = meeting.display_name ?? meeting.name;
+  const hostName =
+    meeting.host?.display_name ?? meeting.host?.name ?? null;
+  const meetingImg = !imgError ? assetUrl(meeting.image_path) : null;
+  const hostImg = assetUrl(meeting.host?.image_path);
+  const categoryColor = meeting.category?.color ?? "#01467f";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: index * 0.04, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -4, boxShadow: "var(--shadow-lg)" }}
-      style={{
-        background: "var(--bg-card)",
-        borderRadius: "var(--radius-lg)",
-        border: "1px solid var(--border)",
-        boxShadow: "var(--shadow-sm)",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        transition: "box-shadow 0.2s",
-        cursor: "pointer",
-      }}
-      onClick={() => onBook(meeting)}
+    <motion.button
+      onClick={onClick}
+      className="group relative flex flex-col rounded-2xl border border-border bg-surface overflow-hidden text-left w-full transition-shadow hover:shadow-xl hover:shadow-black/10"
+      whileHover={{ y: -3 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 300, damping: 25 }}
     >
-      {/* Image / gradient header */}
-      <div
-        style={{
-          height: "140px",
-          position: "relative",
-          overflow: "hidden",
-          flexShrink: 0,
-        }}
-      >
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={displayName}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              display: "block",
-            }}
+      {/* Image / placeholder */}
+      <div className="relative aspect-video w-full overflow-hidden bg-surface-2">
+        {meetingImg ? (
+          <Image
+            src={meetingImg}
+            alt={title}
+            fill
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            unoptimized
+            onError={() => setImgError(true)}
           />
         ) : (
           <div
+            className="absolute inset-0 flex items-center justify-center"
             style={{
-              width: "100%",
-              height: "100%",
-              background: categoryColor
-                ? `linear-gradient(135deg, ${categoryColor}cc, ${categoryColor}66)`
-                : "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              background: `linear-gradient(135deg, ${categoryColor}22, ${categoryColor}44)`,
             }}
           >
-            <Calendar size={40} color="rgba(255,255,255,0.7)" />
+            <Calendar
+              className="h-10 w-10 opacity-30"
+              style={{ color: categoryColor }}
+            />
+          </div>
+        )}
+
+        {/* Host avatar overlay */}
+        {meeting.host && (
+          <div className="absolute bottom-2 right-2">
+            <div className="h-9 w-9 rounded-full border-2 border-white/80 bg-surface overflow-hidden shadow-md">
+              {hostImg ? (
+                <Image
+                  src={hostImg}
+                  alt={hostName ?? "Host"}
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center text-xs font-bold text-white"
+                  style={{ backgroundColor: categoryColor }}
+                >
+                  {hostName?.[0]?.toUpperCase() ?? (
+                    <User className="h-4 w-4" />
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* Category badge */}
-        {categoryName && (
-          <div
-            style={{
-              position: "absolute",
-              top: "10px",
-              left: "10px",
-              padding: "4px 10px",
-              borderRadius: "var(--radius-pill)",
-              background: categoryColor ?? "var(--primary)",
-              color: "white",
-              fontSize: "11px",
-              fontWeight: 700,
-              letterSpacing: "0.3px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-            }}
-          >
-            {categoryName}
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
-        <h3
-          style={{
-            fontSize: "15px",
-            fontWeight: 700,
-            color: "var(--text-primary)",
-            lineHeight: "1.3",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {displayName}
-        </h3>
-
-        {hostName && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              color: "var(--text-secondary)",
-              fontSize: "13px",
-            }}
-          >
-            <User size={13} style={{ flexShrink: 0 }} />
+        {meeting.category && (
+          <div className="absolute top-2 left-2">
             <span
-              style={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
+              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
+              style={{ backgroundColor: categoryColor }}
             >
-              {hostName}
+              {meeting.category.name}
             </span>
           </div>
         )}
       </div>
 
-      {/* Book button */}
-      <div style={{ padding: "0 16px 16px" }}>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onBook(meeting);
-          }}
-          style={{
-            width: "100%",
-            padding: "10px",
-            borderRadius: "10px",
-            border: "none",
-            background: "linear-gradient(135deg, var(--primary), var(--secondary))",
-            color: "white",
-            fontWeight: 600,
-            fontSize: "13px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "6px",
-          }}
-        >
-          <ExternalLink size={14} />
-          Book Now
-        </motion.button>
+      {/* Content */}
+      <div className="flex flex-1 flex-col gap-1.5 p-4">
+        <h3 className="font-semibold text-text leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+          {title}
+        </h3>
+        {hostName && (
+          <p className="text-xs text-text-muted flex items-center gap-1">
+            <User className="h-3 w-3" />
+            {hostName}
+          </p>
+        )}
       </div>
-    </motion.div>
+
+      {/* Book CTA */}
+      <div className="px-4 pb-4">
+        <div className="flex w-full items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white opacity-0 group-hover:opacity-100 transition-opacity">
+          Book Meeting
+        </div>
+      </div>
+    </motion.button>
   );
 }

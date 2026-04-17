@@ -1,29 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState, useMemo } from "react";
+import { motion } from "framer-motion";
+import Image from "next/image";
 import {
   Search,
-  Pencil,
-  ImagePlus,
-  Trash2,
-  X,
+  CalendarDays,
+  ImageIcon,
   Lock,
   Unlock,
-  Eye,
   EyeOff,
-  ExternalLink,
-  Calendar,
+  Eye,
+  ChevronDown,
+  X,
 } from "lucide-react";
-import { categoriesApi, hostsApi, meetingsApi, UPLOADS_BASE } from "@/lib/api";
-import type { Category, MeetingHost, MeetingLink } from "@/lib/types";
-import AdminCard, {
-  AdminPageHeader,
-  FormField,
-  FormModal,
-  inputStyle,
-  StatusBadge,
-} from "@/components/admin/AdminCard";
+import Modal from "@/components/ui/Modal";
+import ImageUpload from "@/components/ui/ImageUpload";
+import {
+  getMeetings,
+  getCategories,
+  getHosts,
+  updateMeeting,
+  uploadMeetingImage,
+  deleteMeetingImage,
+} from "@/lib/api";
+import { assetUrl } from "@/lib/api";
+import type { MeetingLink, MeetingLinkUpdate, Category, MeetingHost } from "@/lib/types";
 
 export default function AdminMeetingsPage() {
   const [meetings, setMeetings] = useState<MeetingLink[]>([]);
@@ -31,654 +33,375 @@ export default function AdminMeetingsPage() {
   const [hosts, setHosts] = useState<MeetingHost[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterCat, setFilterCat] = useState<number | null>(null);
-  const [editingMeeting, setEditingMeeting] = useState<MeetingLink | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({
-    display_name: "",
-    category_id: "" as string,
-    host_id: "" as string,
-    sort_order: 0,
-    host_override_locked: false,
-  });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [imageModal, setImageModal] = useState<MeetingLink | null>(null);
+  const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [ms, cats, hs] = await Promise.all([
-        meetingsApi.list({ include_inactive: true }),
-        categoriesApi.list(true),
-        hostsApi.list(true),
-      ]);
-      setMeetings(ms);
-      setCategories(cats);
-      setHosts(hs);
-    } finally {
-      setLoading(false);
-    }
+  const reload = async () => {
+    const [ms, cats, hs] = await Promise.all([
+      getMeetings({ include_inactive: true, limit: 500 }),
+      getCategories(true),
+      getHosts(true),
+    ]);
+    setMeetings(ms);
+    setCategories(cats);
+    setHosts(hs);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    reload();
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-
-  const openEdit = (m: MeetingLink) => {
-    setEditingMeeting(m);
-    setEditForm({
-      display_name: m.display_name ?? "",
-      category_id: m.category_id != null ? String(m.category_id) : "",
-      host_id: m.host_id != null ? String(m.host_id) : "",
-      sort_order: m.sort_order,
-      host_override_locked: m.host_override_locked,
+  const filtered = useMemo(() => {
+    return meetings.filter((m) => {
+      if (filterActive === "active" && !m.is_active) return false;
+      if (filterActive === "inactive" && m.is_active) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        const name = (m.display_name ?? m.name).toLowerCase();
+        if (!name.includes(q)) return false;
+      }
+      return true;
     });
-    setSaveError(null);
-  };
+  }, [meetings, search, filterActive]);
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingMeeting) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await meetingsApi.update(editingMeeting.id, {
-        display_name: editForm.display_name || null,
-        category_id: editForm.category_id ? parseInt(editForm.category_id) : null,
-        host_id: editForm.host_id ? parseInt(editForm.host_id) : null,
-        sort_order: editForm.sort_order,
-        unlock_host_override: !editForm.host_override_locked,
-      });
-      setEditingMeeting(null);
-      fetchAll();
-    } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : "Failed to save.");
-    } finally {
-      setSaving(false);
-    }
+  const handleUpdate = async (id: number, data: MeetingLinkUpdate) => {
+    await updateMeeting(id, data);
+    reload();
   };
-
-  const handleToggleActive = async (m: MeetingLink) => {
-    try {
-      await meetingsApi.update(m.id, { is_active: !m.is_active });
-      fetchAll();
-    } catch { /* ignore */ }
-  };
-
-  const handleImageUpload = async (meeting: MeetingLink, file: File) => {
-    setUploadingId(meeting.id);
-    try {
-      await meetingsApi.uploadImage(meeting.id, file);
-      fetchAll();
-    } finally {
-      setUploadingId(null);
-    }
-  };
-
-  const handleImageDelete = async (meeting: MeetingLink) => {
-    try {
-      await meetingsApi.deleteImage(meeting.id);
-      fetchAll();
-    } catch { /* ignore */ }
-  };
-
-  const filtered = meetings.filter((m) => {
-    if (filterCat != null && m.category_id !== filterCat) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!(m.display_name ?? m.name).toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
 
   return (
-    <>
-      <AdminPageHeader
-        title="Meetings"
-        description="Manage all meeting links — assign categories, hosts, images, and ordering."
-      />
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-text">Meetings</h1>
+        <p className="text-sm text-text-muted mt-1">
+          Manage all meeting links and their settings
+        </p>
+      </div>
 
-      {/* Filter bar */}
-      <div
-        style={{
-          display: "flex",
-          gap: "12px",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
-      >
-        <div style={{ position: "relative", flex: "1 1 240px", maxWidth: "360px" }}>
-          <Search
-            size={14}
-            style={{
-              position: "absolute",
-              left: "12px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "var(--text-muted)",
-              pointerEvents: "none",
-            }}
-          />
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-48">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
           <input
+            type="search"
+            placeholder="Search meetings…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search meetings…"
-            style={{
-              ...inputStyle,
-              paddingLeft: "34px",
-              borderRadius: "var(--radius-pill)",
-            }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+            className="w-full rounded-2xl border border-border bg-surface pl-10 pr-4 py-2.5 text-sm text-text placeholder:text-text-muted/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
           />
         </div>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <FilterChip label="All" active={filterCat === null} onClick={() => setFilterCat(null)} />
-          {categories.map((c) => (
-            <FilterChip
-              key={c.id}
-              label={c.name}
-              active={filterCat === c.id}
-              color={c.color ?? undefined}
-              onClick={() => setFilterCat(filterCat === c.id ? null : c.id)}
-            />
+        <div className="flex rounded-xl border border-border overflow-hidden">
+          {(["all", "active", "inactive"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilterActive(f)}
+              className={`px-3 py-2 text-sm font-medium transition-colors capitalize ${
+                filterActive === f
+                  ? "bg-primary text-white"
+                  : "text-text-muted hover:bg-surface-2 hover:text-text"
+              }`}
+            >
+              {f}
+            </button>
           ))}
         </div>
       </div>
 
-      <AdminCard title={`${filtered.length} Meeting${filtered.length !== 1 ? "s" : ""}`}>
-        {loading ? (
-          <LoadingRows />
-        ) : filtered.length === 0 ? (
-          <EmptyRow />
-        ) : (
-          <div>
-            {filtered.map((m, i) => (
+      <p className="text-sm text-text-muted">
+        Showing {filtered.length} of {meetings.length} meetings
+      </p>
+
+      {loading ? (
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-20 rounded-2xl border border-border bg-surface animate-pulse"
+            />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <CalendarDays className="h-12 w-12 text-text-muted/30 mb-3" />
+          <p className="font-semibold text-text">No meetings found</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {filtered.map((meeting, i) => (
+            <motion.div
+              key={meeting.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(i * 0.02, 0.3) }}
+            >
               <MeetingRow
-                key={m.id}
-                meeting={m}
-                index={i}
-                isLast={i === filtered.length - 1}
-                onEdit={() => openEdit(m)}
-                onToggleActive={() => handleToggleActive(m)}
-                onImageClick={() => {
-                  if (m.image_path) {
-                    handleImageDelete(m);
-                  } else {
-                    fileInputRef.current?.setAttribute("data-meeting-id", String(m.id));
-                    fileInputRef.current?.click();
-                  }
-                }}
-                uploading={uploadingId === m.id}
+                meeting={meeting}
+                categories={categories}
+                hosts={hosts}
+                onUpdate={handleUpdate}
+                onImageClick={() => setImageModal(meeting)}
               />
-            ))}
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* Image upload modal */}
+      <Modal
+        open={!!imageModal}
+        onClose={() => {
+          setImageModal(null);
+          reload();
+        }}
+        title={`Image — ${imageModal?.display_name ?? imageModal?.name ?? ""}`}
+        size="sm"
+      >
+        {imageModal && (
+          <div className="p-6">
+            <ImageUpload
+              currentImageUrl={assetUrl(imageModal.image_path)}
+              label="Meeting thumbnail"
+              onUpload={async (file) => {
+                const updated = await uploadMeetingImage(imageModal.id, file);
+                setImageModal(updated);
+                reload();
+              }}
+              onRemove={async () => {
+                const updated = await deleteMeetingImage(imageModal.id);
+                setImageModal(updated);
+                reload();
+              }}
+            />
           </div>
         )}
-      </AdminCard>
-
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        style={{ display: "none" }}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          const idAttr = e.target.getAttribute("data-meeting-id");
-          if (file && idAttr) {
-            const meeting = meetings.find((m) => m.id === parseInt(idAttr));
-            if (meeting) handleImageUpload(meeting, file);
-          }
-          e.target.value = "";
-        }}
-      />
-
-      {/* Edit modal */}
-      <AnimatePresence>
-        {editingMeeting && (
-          <FormModal
-            title="Edit Meeting Link"
-            onClose={() => setEditingMeeting(null)}
-            onSubmit={handleEditSubmit}
-            loading={saving}
-            submitLabel="Save Changes"
-          >
-            <div
-              style={{
-                padding: "12px 16px",
-                borderRadius: "10px",
-                background: "var(--bg-hover)",
-                border: "1px solid var(--border)",
-                marginBottom: "4px",
-              }}
-            >
-              <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                {editingMeeting.name}
-              </p>
-              <a
-                href={editingMeeting.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  fontSize: "12px",
-                  color: "var(--primary)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  marginTop: "3px",
-                  textDecoration: "none",
-                  width: "fit-content",
-                }}
-              >
-                <ExternalLink size={11} /> HubSpot Link
-              </a>
-            </div>
-
-            <FormField label="Display Name">
-              <input
-                value={editForm.display_name}
-                onChange={(e) => setEditForm((f) => ({ ...f, display_name: e.target.value }))}
-                style={inputStyle}
-                placeholder="Leave blank to use HubSpot name"
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
-
-            <FormField label="Category">
-              <select
-                value={editForm.category_id}
-                onChange={(e) => setEditForm((f) => ({ ...f, category_id: e.target.value }))}
-                style={inputStyle}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              >
-                <option value="">— Uncategorised —</option>
-                {categories.filter((c) => c.is_active).map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </FormField>
-
-            <FormField label="Host">
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <select
-                  value={editForm.host_id}
-                  onChange={(e) => setEditForm((f) => ({ ...f, host_id: e.target.value }))}
-                  style={{ ...inputStyle, flex: 1 }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-                >
-                  <option value="">— Auto from HubSpot —</option>
-                  {hosts.filter((h) => h.is_active).map((h) => (
-                    <option key={h.id} value={h.id}>
-                      {h.display_name ?? h.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  title={editForm.host_override_locked ? "Unlock host (allow sync override)" : "Lock host (prevent sync override)"}
-                  onClick={() =>
-                    setEditForm((f) => ({ ...f, host_override_locked: !f.host_override_locked }))
-                  }
-                  style={{
-                    padding: "9px 10px",
-                    borderRadius: "10px",
-                    border: "1px solid var(--border)",
-                    background: editForm.host_override_locked
-                      ? "color-mix(in srgb, var(--secondary) 10%, transparent)"
-                      : "var(--bg-hover)",
-                    color: editForm.host_override_locked ? "var(--secondary)" : "var(--text-muted)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  {editForm.host_override_locked ? <Lock size={14} /> : <Unlock size={14} />}
-                </button>
-              </div>
-              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
-                {editForm.host_override_locked
-                  ? "Host is locked — sync won't override this assignment."
-                  : "Host will be auto-updated on next sync."}
-              </p>
-            </FormField>
-
-            <FormField label="Sort Order">
-              <input
-                type="number"
-                value={editForm.sort_order}
-                onChange={(e) =>
-                  setEditForm((f) => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))
-                }
-                style={{ ...inputStyle, width: "100px" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
-
-            {saveError && (
-              <div
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: "8px",
-                  background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.2)",
-                  color: "#ef4444",
-                  fontSize: "13px",
-                }}
-              >
-                {saveError}
-              </div>
-            )}
-          </FormModal>
-        )}
-      </AnimatePresence>
-    </>
+      </Modal>
+    </div>
   );
 }
 
 function MeetingRow({
   meeting,
-  index,
-  isLast,
-  onEdit,
-  onToggleActive,
+  categories,
+  hosts,
+  onUpdate,
   onImageClick,
-  uploading,
 }: {
   meeting: MeetingLink;
-  index: number;
-  isLast: boolean;
-  onEdit: () => void;
-  onToggleActive: () => void;
+  categories: Category[];
+  hosts: MeetingHost[];
+  onUpdate: (id: number, data: MeetingLinkUpdate) => Promise<void>;
   onImageClick: () => void;
-  uploading: boolean;
 }) {
-  const displayName = meeting.display_name ?? meeting.name;
-  const imageUrl = meeting.image_path ? `${UPLOADS_BASE}${meeting.image_path}` : null;
+  const [displayName, setDisplayName] = useState(
+    meeting.display_name ?? meeting.name
+  );
+  const [editingName, setEditingName] = useState(false);
+  const [sortOrder, setSortOrder] = useState(String(meeting.sort_order));
+  const [saving, setSaving] = useState(false);
+
+  const imgUrl = assetUrl(meeting.image_path);
+  const categoryColor = meeting.category?.color ?? "#01467f";
+
+  const save = async (data: MeetingLinkUpdate) => {
+    setSaving(true);
+    await onUpdate(meeting.id, data);
+    setSaving(false);
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.025 }}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "16px",
-        padding: "12px 24px",
-        borderBottom: isLast ? "none" : "1px solid var(--border)",
-        flexWrap: "wrap",
-        opacity: meeting.is_active ? 1 : 0.55,
-      }}
+    <div
+      className={`rounded-2xl border border-border bg-surface p-4 transition-opacity ${
+        !meeting.is_active ? "opacity-60" : ""
+      }`}
     >
-      {/* Thumbnail */}
-      <div
-        style={{
-          width: "44px",
-          height: "44px",
-          borderRadius: "10px",
-          overflow: "hidden",
-          flexShrink: 0,
-          position: "relative",
-          cursor: "pointer",
-          border: "1px solid var(--border)",
-        }}
-        onClick={onImageClick}
-        title={imageUrl ? "Click to remove image" : "Click to upload image"}
-      >
-        {uploading ? (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "var(--bg-hover)",
-            }}
-          >
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              style={{ fontSize: "16px" }}
-            >
-              ⟳
-            </motion.div>
-          </div>
-        ) : imageUrl ? (
-          <>
-            <img src={imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Thumbnail */}
+        <button
+          onClick={onImageClick}
+          className="relative h-12 w-20 rounded-xl overflow-hidden bg-surface-2 shrink-0 group"
+        >
+          {imgUrl ? (
+            <Image
+              src={imgUrl}
+              alt={meeting.name}
+              fill
+              className="object-cover"
+              unoptimized
+            />
+          ) : (
             <div
-              className="img-remove-overlay"
-              style={{
-                position: "absolute",
-                inset: 0,
-                background: "rgba(239,68,68,0.7)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: 0,
-                transition: "opacity 0.15s",
-              }}
+              className="absolute inset-0 flex items-center justify-center"
+              style={{ backgroundColor: `${categoryColor}22` }}
             >
-              <X size={16} color="white" />
+              <CalendarDays
+                className="h-5 w-5"
+                style={{ color: categoryColor }}
+              />
             </div>
-          </>
-        ) : (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              background: meeting.category?.color
-                ? `${meeting.category.color}33`
-                : "var(--bg-hover)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ImagePlus size={16} color="var(--text-muted)" />
+          )}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+            <ImageIcon className="h-4 w-4 text-white" />
           </div>
-        )}
-      </div>
+        </button>
 
-      {/* Name and meta */}
-      <div style={{ flex: 1, minWidth: "160px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-          <p style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>
-            {displayName}
-          </p>
-          {meeting.display_name && meeting.display_name !== meeting.name && (
-            <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-              ({meeting.name})
-            </span>
-          )}
-          {meeting.host_override_locked && (
-            <span title="Host override locked" style={{ display: "inline-flex" }}>
-              <Lock size={11} color="var(--secondary)" />
-            </span>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap" }}>
-          {meeting.category && (
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 600,
-                padding: "2px 7px",
-                borderRadius: "var(--radius-pill)",
-                background: meeting.category.color
-                  ? `${meeting.category.color}22`
-                  : "color-mix(in srgb, var(--primary) 10%, transparent)",
-                color: meeting.category.color ?? "var(--primary)",
+        {/* Name */}
+        <div className="flex-1 min-w-36">
+          {editingName ? (
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              onBlur={() => {
+                setEditingName(false);
+                save({ display_name: displayName || undefined });
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setEditingName(false);
+                  save({ display_name: displayName || undefined });
+                }
+                if (e.key === "Escape") {
+                  setEditingName(false);
+                  setDisplayName(meeting.display_name ?? meeting.name);
+                }
+              }}
+              autoFocus
+              className="w-full rounded-lg border border-primary bg-background px-2 py-1 text-sm font-medium text-text focus:outline-none"
+            />
+          ) : (
+            <button
+              onClick={() => setEditingName(true)}
+              className="text-sm font-semibold text-text hover:text-primary transition-colors text-left w-full truncate"
+              title="Click to edit display name"
             >
-              {meeting.category.name}
-            </span>
+              {displayName}
+            </button>
           )}
-          {meeting.host && (
-            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-              {meeting.host.display_name ?? meeting.host.name}
-            </span>
+          <p className="text-xs text-text-muted truncate mt-0.5">
+            {meeting.name}
+          </p>
+        </div>
+
+        {/* Category selector */}
+        <div className="min-w-32">
+          <SelectField
+            value={String(meeting.category_id ?? "")}
+            onChange={(v) =>
+              save({ category_id: v ? Number(v) : null })
+            }
+            placeholder="Category"
+          >
+            <option value="">No category</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+
+        {/* Host selector */}
+        <div className="min-w-32 flex items-center gap-1">
+          <SelectField
+            value={String(meeting.host_id ?? "")}
+            onChange={(v) => save({ host_id: v ? Number(v) : null })}
+            placeholder="Host"
+            disabled={false}
+          >
+            <option value="">No host</option>
+            {hosts.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.display_name ?? h.name}
+              </option>
+            ))}
+          </SelectField>
+          {/* Lock indicator */}
+          <button
+            title={
+              meeting.host_override_locked
+                ? "Host locked (admin override). Click to unlock for sync."
+                : "Host unlocked (sync can update)."
+            }
+            onClick={() =>
+              save({ unlock_host_override: meeting.host_override_locked })
+            }
+            className="text-text-muted hover:text-primary transition-colors shrink-0"
+          >
+            {meeting.host_override_locked ? (
+              <Lock className="h-3.5 w-3.5 text-secondary" />
+            ) : (
+              <Unlock className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+
+        {/* Sort order */}
+        <input
+          type="number"
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value)}
+          onBlur={() => save({ sort_order: Number(sortOrder) })}
+          className="w-16 rounded-xl border border-border bg-surface px-2 py-1.5 text-center text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
+          title="Sort order"
+        />
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 ml-auto">
+          <button
+            onClick={onImageClick}
+            className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs text-text-muted hover:bg-surface-2 hover:text-text transition-colors"
+            title="Upload image"
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => save({ is_active: !meeting.is_active })}
+            className={`flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs transition-colors ${
+              meeting.is_active
+                ? "text-text-muted hover:bg-error-bg hover:text-error"
+                : "text-success hover:bg-success-bg"
+            }`}
+            title={meeting.is_active ? "Hide meeting" : "Show meeting"}
+          >
+            {meeting.is_active ? (
+              <EyeOff className="h-3.5 w-3.5" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
+          </button>
+          {saving && (
+            <span className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           )}
         </div>
       </div>
-
-      {/* Sort order */}
-      <span style={{ fontSize: "12px", color: "var(--text-muted)", flexShrink: 0 }}>
-        #{meeting.sort_order}
-      </span>
-
-      <StatusBadge active={meeting.is_active} />
-
-      {/* Actions */}
-      <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
-        <a
-          href={meeting.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Open HubSpot link"
-          style={{
-            width: "30px",
-            height: "30px",
-            borderRadius: "8px",
-            border: "1px solid var(--border)",
-            background: "var(--bg-hover)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--text-secondary)",
-            textDecoration: "none",
-          }}
-        >
-          <ExternalLink size={13} />
-        </a>
-        <IconBtn onClick={onEdit} title="Edit">
-          <Pencil size={13} />
-        </IconBtn>
-        <IconBtn
-          onClick={onToggleActive}
-          title={meeting.is_active ? "Deactivate" : "Reactivate"}
-          danger={meeting.is_active}
-        >
-          {meeting.is_active ? <EyeOff size={13} /> : <Eye size={13} />}
-        </IconBtn>
-      </div>
-    </motion.div>
-  );
-}
-
-function IconBtn({
-  onClick,
-  title,
-  danger,
-  children,
-}: {
-  onClick: () => void;
-  title: string;
-  danger?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <motion.button
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.9 }}
-      onClick={onClick}
-      title={title}
-      style={{
-        width: "30px",
-        height: "30px",
-        borderRadius: "8px",
-        border: "1px solid var(--border)",
-        background: "var(--bg-hover)",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: danger ? "#ef4444" : "var(--text-secondary)",
-      }}
-    >
-      {children}
-    </motion.button>
-  );
-}
-
-function FilterChip({
-  label,
-  active,
-  color,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  color?: string;
-  onClick: () => void;
-}) {
-  return (
-    <motion.button
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.97 }}
-      onClick={onClick}
-      style={{
-        padding: "5px 14px",
-        borderRadius: "var(--radius-pill)",
-        border: `1.5px solid ${active ? (color ?? "var(--primary)") : "var(--border)"}`,
-        background: active
-          ? color
-            ? `${color}1a`
-            : "color-mix(in srgb, var(--primary) 10%, transparent)"
-          : "var(--bg-card)",
-        color: active ? (color ?? "var(--primary)") : "var(--text-secondary)",
-        fontWeight: active ? 700 : 500,
-        fontSize: "12px",
-        cursor: "pointer",
-      }}
-    >
-      {label}
-    </motion.button>
-  );
-}
-
-function LoadingRows() {
-  return (
-    <div>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <motion.div
-          key={i}
-          animate={{ opacity: [0.5, 0.8, 0.5] }}
-          transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.1 }}
-          style={{
-            height: "60px",
-            margin: "8px 24px",
-            borderRadius: "8px",
-            background: "var(--bg-hover)",
-          }}
-        />
-      ))}
     </div>
   );
 }
 
-function EmptyRow() {
+function SelectField({
+  value,
+  onChange,
+  placeholder,
+  children,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  children: React.ReactNode;
+  disabled?: boolean;
+}) {
   return (
-    <div
-      style={{
-        padding: "48px 24px",
-        textAlign: "center",
-        color: "var(--text-muted)",
-        fontSize: "14px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "12px",
-      }}
-    >
-      <Calendar size={36} color="var(--text-muted)" />
-      No meetings found matching your filters.
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="w-full appearance-none rounded-xl border border-border bg-surface pl-3 pr-7 py-1.5 text-sm text-text focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors disabled:opacity-60"
+      >
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted" />
     </div>
   );
 }

@@ -2,77 +2,76 @@
 
 import React, {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useState,
+  useCallback,
 } from "react";
-import { authApi, tokenStorage } from "@/lib/api";
-import type { Token, User } from "@/lib/types";
+import { getMe, setTokens, clearTokens } from "@/lib/api";
+import type { User, Token } from "@/lib/types";
 
-interface AuthContextValue {
+interface AuthState {
   user: User | null;
   isLoading: boolean;
-  isAuthenticated: boolean;
   isAdmin: boolean;
-  login: (tokens: Token) => Promise<void>;
+  login: (token: Token) => Promise<void>;
   logout: () => void;
-  refreshUser: () => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUser = useCallback(async () => {
-    const token = tokenStorage.getAccess();
-    if (!token) {
-      setUser(null);
-      setIsLoading(false);
-      return;
-    }
+  const loadUser = useCallback(async () => {
     try {
-      const me = await authApi.me();
+      const me = await getMe();
       setUser(me);
     } catch {
-      tokenStorage.clear();
+      clearTokens();
       setUser(null);
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
+    const hasToken =
+      typeof window !== "undefined" && !!localStorage.getItem("access_token");
+    if (hasToken) {
+      loadUser().finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+    }
+  }, [loadUser]);
 
-  const login = useCallback(async (tokens: Token) => {
-    tokenStorage.set(tokens);
-    await fetchUser();
-  }, [fetchUser]);
+  const login = useCallback(
+    async (token: Token) => {
+      setTokens(token);
+      await loadUser();
+    },
+    [loadUser]
+  );
 
   const logout = useCallback(() => {
-    tokenStorage.clear();
+    clearTokens();
     setUser(null);
     window.location.href = "/login";
   }, []);
 
-  const refreshUser = useCallback(async () => {
-    await fetchUser();
-  }, [fetchUser]);
+  const refresh = useCallback(async () => {
+    await loadUser();
+  }, [loadUser]);
 
   return (
     <AuthContext.Provider
       value={{
         user,
         isLoading,
-        isAuthenticated: !!user,
         isAdmin: user?.role === "admin",
         login,
         logout,
-        refreshUser,
+        refresh,
       }}
     >
       {children}
@@ -80,8 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useAuth() {
+export function useAuth(): AuthState {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
 }

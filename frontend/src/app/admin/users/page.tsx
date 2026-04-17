@@ -1,333 +1,349 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Pencil, Trash2, Shield, User } from "lucide-react";
-import { usersApi } from "@/lib/api";
-import type { User as UserType } from "@/lib/types";
+import { motion } from "framer-motion";
+import {
+  Plus,
+  Pencil,
+  Users,
+  ShieldCheck,
+  User,
+  AlertCircle,
+  Check,
+  X,
+} from "lucide-react";
+import Modal from "@/components/ui/Modal";
+import { getUsers, createUser, updateUser, deleteUser } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import AdminCard, {
-  AdminPageHeader,
-  FormField,
-  FormModal,
-  PrimaryButton,
-  StatusBadge,
-  inputStyle,
-} from "@/components/admin/AdminCard";
+import type { User as UserType, UserCreate, UserRole } from "@/lib/types";
 
 export default function UsersPage() {
-  const { user: currentUser } = useAuth();
+  const { user: me } = useAuth();
   const [users, setUsers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<UserType | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    email: "",
-    name: "",
-    role: "user" as "admin" | "user",
-    password: "",
-  });
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = async () => {
-    setLoading(true);
-    try {
-      setUsers(await usersApi.list());
-    } finally {
+  const reload = () =>
+    getUsers().then((data) => {
+      setUsers(data);
       setLoading(false);
+    });
+
+  useEffect(() => {
+    reload();
+  }, []);
+
+  const handleSave = async (data: UserCreate & { password?: string }) => {
+    try {
+      if (editing) {
+        await updateUser(editing.id, data);
+      } else {
+        await createUser(data);
+      }
+      setModalOpen(false);
+      setError(null);
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
     }
   };
 
-  useEffect(() => { fetch(); }, []);
-
-  const openCreate = () => {
-    setEditing(null);
-    setForm({ email: "", name: "", role: "user", password: "" });
-    setError(null);
-    setModalOpen(true);
+  const handleToggle = async (u: UserType) => {
+    if (u.id === me?.id) return;
+    await updateUser(u.id, { is_active: !u.is_active });
+    reload();
   };
 
-  const openEdit = (u: UserType) => {
-    setEditing(u);
-    setForm({ email: u.email, name: u.name ?? "", role: u.role, password: "" });
-    setError(null);
-    setModalOpen(true);
-  };
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-text">Users</h1>
+          <p className="text-sm text-text-muted mt-1">
+            Manage portal access
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setEditing(null);
+            setError(null);
+            setModalOpen(true);
+          }}
+          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add User
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-16 rounded-2xl border border-border bg-surface animate-pulse"
+            />
+          ))}
+        </div>
+      ) : users.length === 0 ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <Users className="h-12 w-12 text-text-muted/30 mb-3" />
+          <p className="font-semibold text-text">No users yet</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-surface-2 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
+                <th className="px-4 py-3">User</th>
+                <th className="px-4 py-3 hidden sm:table-cell">Email</th>
+                <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u, i) => (
+                <motion.tr
+                  key={u.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: i * 0.03 }}
+                  className="border-b border-border last:border-0 hover:bg-surface-2 transition-colors"
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-light text-xs font-bold text-primary shrink-0">
+                        {u.name[0]?.toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-text">{u.name}</p>
+                        <p className="text-xs text-text-muted sm:hidden">
+                          {u.email}
+                        </p>
+                        {u.id === me?.id && (
+                          <span className="text-xs text-primary">(you)</span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-text-muted hidden sm:table-cell">
+                    {u.email}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        u.role === "admin"
+                          ? "bg-secondary-light text-secondary"
+                          : "bg-primary-light text-primary"
+                      }`}
+                    >
+                      {u.role === "admin" ? (
+                        <ShieldCheck className="h-3 w-3" />
+                      ) : (
+                        <User className="h-3 w-3" />
+                      )}
+                      {u.role}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        u.is_active
+                          ? "bg-success-bg text-success"
+                          : "bg-error-bg text-error"
+                      }`}
+                    >
+                      {u.is_active ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <X className="h-3 w-3" />
+                      )}
+                      {u.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          setEditing(u);
+                          setError(null);
+                          setModalOpen(true);
+                        }}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-muted hover:bg-surface hover:text-text transition-colors"
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Edit
+                      </button>
+                      {u.id !== me?.id && (
+                        <button
+                          onClick={() => handleToggle(u)}
+                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-muted hover:bg-surface hover:text-text transition-colors"
+                        >
+                          {u.is_active ? (
+                            <X className="h-3 w-3" />
+                          ) : (
+                            <Check className="h-3 w-3" />
+                          )}
+                          {u.is_active ? "Disable" : "Enable"}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <UserModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSave={handleSave}
+        editing={editing}
+        error={error}
+        isSelf={editing?.id === me?.id}
+      />
+    </div>
+  );
+}
+
+function UserModal({
+  open,
+  onClose,
+  onSave,
+  editing,
+  error,
+  isSelf,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (data: UserCreate & { password?: string }) => Promise<void>;
+  editing: UserType | null;
+  error: string | null;
+  isSelf: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<UserRole>("user");
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(editing?.name ?? "");
+      setEmail(editing?.email ?? "");
+      setRole(editing?.role ?? "user");
+      setPassword("");
+    }
+  }, [open, editing]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setError(null);
-    try {
-      if (editing) {
-        await usersApi.update(editing.id, {
-          name: form.name || null,
-          role: form.role,
-          password: form.password || null,
-        });
-      } else {
-        await usersApi.create({
-          email: form.email,
-          name: form.name || null,
-          role: form.role,
-          password: form.password || null,
-        });
-      }
-      setModalOpen(false);
-      fetch();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save user.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeactivate = async (u: UserType) => {
-    if (u.id === currentUser?.id) return;
-    try {
-      await usersApi.update(u.id, { is_active: !u.is_active });
-      fetch();
-    } catch { /* ignore */ }
+    await onSave({
+      name,
+      email,
+      role,
+      password: password || undefined,
+    });
+    setSaving(false);
   };
 
   return (
-    <>
-      <AdminPageHeader
-        title="Users"
-        description="Manage who has access to the portal."
-        action={
-          <PrimaryButton onClick={openCreate}>
-            <Plus size={14} /> Add User
-          </PrimaryButton>
-        }
-      />
-
-      <AdminCard title={`Portal Users (${users.length})`}>
-        {loading ? (
-          <LoadingRows />
-        ) : users.length === 0 ? (
-          <EmptyRow />
-        ) : (
-          <div>
-            {users.map((u, i) => (
-              <motion.div
-                key={u.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "16px",
-                  padding: "14px 24px",
-                  borderBottom: i < users.length - 1 ? "1px solid var(--border)" : "none",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div
-                  style={{
-                    width: "38px",
-                    height: "38px",
-                    borderRadius: "50%",
-                    background:
-                      u.role === "admin"
-                        ? "linear-gradient(135deg, var(--primary), var(--secondary))"
-                        : "linear-gradient(135deg, var(--primary-light), var(--primary))",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  {u.role === "admin" ? (
-                    <Shield size={16} color="white" />
-                  ) : (
-                    <User size={16} color="white" />
-                  )}
-                </div>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <p style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>
-                      {u.name ?? u.email}
-                    </p>
-                    {u.id === currentUser?.id && (
-                      <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>(you)</span>
-                    )}
-                  </div>
-                  <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
-                    {u.email}
-                  </p>
-                </div>
-
-                <RoleBadge role={u.role} />
-                <StatusBadge active={u.is_active} />
-
-                <div style={{ display: "flex", gap: "6px", marginLeft: "8px" }}>
-                  <IconButton onClick={() => openEdit(u)} title="Edit">
-                    <Pencil size={14} />
-                  </IconButton>
-                  {u.id !== currentUser?.id && (
-                    <IconButton
-                      onClick={() => handleDeactivate(u)}
-                      title={u.is_active ? "Deactivate" : "Reactivate"}
-                      danger={u.is_active}
-                    >
-                      <Trash2 size={14} />
-                    </IconButton>
-                  )}
-                </div>
-              </motion.div>
-            ))}
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={editing ? "Edit User" : "New User"}
+      size="sm"
+    >
+      <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-error-bg px-3 py-2 text-sm text-error">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
           </div>
         )}
-      </AdminCard>
 
-      <AnimatePresence>
-        {modalOpen && (
-          <FormModal
-            title={editing ? "Edit User" : "Add User"}
-            onClose={() => setModalOpen(false)}
-            onSubmit={handleSubmit}
-            loading={saving}
+        <Field label="Full Name">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className={inputCls}
+            placeholder="Jane Doe"
+          />
+        </Field>
+
+        <Field label="Email">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={!!editing}
+            className={`${inputCls} ${editing ? "opacity-60 cursor-not-allowed" : ""}`}
+            placeholder="jane@company.com"
+          />
+        </Field>
+
+        <Field label="Role">
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as UserRole)}
+            disabled={isSelf}
+            className={`${inputCls} ${isSelf ? "opacity-60 cursor-not-allowed" : ""}`}
           >
-            <FormField label="Email" required>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                required={!editing}
-                disabled={!!editing}
-                style={{ ...inputStyle, opacity: editing ? 0.6 : 1 }}
-                placeholder="user@company.com"
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </Field>
 
-            <FormField label="Name">
-              <input
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                style={inputStyle}
-                placeholder="Display name"
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
+        <Field label={editing ? "New Password (leave blank to keep)" : "Password (optional)"}>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={inputCls}
+            placeholder="••••••••"
+            autoComplete="new-password"
+          />
+        </Field>
 
-            <FormField label="Role" required>
-              <select
-                value={form.role}
-                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as "admin" | "user" }))}
-                style={{ ...inputStyle }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </FormField>
-
-            <FormField label={editing ? "New Password (leave blank to keep)" : "Password"}>
-              <input
-                type="password"
-                value={form.password}
-                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                required={!editing}
-                style={inputStyle}
-                placeholder={editing ? "Leave blank to keep current" : "Set a password"}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
-
-            {error && (
-              <div
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: "8px",
-                  background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.2)",
-                  color: "#ef4444",
-                  fontSize: "13px",
-                }}
-              >
-                {error}
-              </div>
-            )}
-          </FormModal>
-        )}
-      </AnimatePresence>
-    </>
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-text-muted hover:bg-surface-2 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60 transition-colors"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
-function RoleBadge({ role }: { role: string }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <span
-      style={{
-        padding: "3px 9px",
-        borderRadius: "var(--radius-pill)",
-        fontSize: "12px",
-        fontWeight: 700,
-        background:
-          role === "admin"
-            ? "color-mix(in srgb, var(--primary) 12%, transparent)"
-            : "color-mix(in srgb, var(--text-muted) 15%, transparent)",
-        color: role === "admin" ? "var(--primary)" : "var(--text-secondary)",
-      }}
-    >
-      {role === "admin" ? "Admin" : "User"}
-    </span>
-  );
-}
-
-function IconButton({ onClick, title, danger, children }: { onClick: () => void; title: string; danger?: boolean; children: React.ReactNode }) {
-  return (
-    <motion.button
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.9 }}
-      onClick={onClick}
-      title={title}
-      style={{
-        width: "30px",
-        height: "30px",
-        borderRadius: "8px",
-        border: "1px solid var(--border)",
-        background: "var(--bg-hover)",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: danger ? "#ef4444" : "var(--text-secondary)",
-      }}
-    >
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+        {label}
+      </label>
       {children}
-    </motion.button>
-  );
-}
-
-function LoadingRows() {
-  return (
-    <div>
-      {[1, 2, 3].map((i) => (
-        <motion.div
-          key={i}
-          animate={{ opacity: [0.5, 0.8, 0.5] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-          style={{ height: "60px", margin: "8px 24px", borderRadius: "8px", background: "var(--bg-hover)" }}
-        />
-      ))}
     </div>
   );
 }
 
-function EmptyRow() {
-  return (
-    <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--text-muted)", fontSize: "14px" }}>
-      No users yet.
-    </div>
-  );
-}
+const inputCls =
+  "w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors";

@@ -1,296 +1,358 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Pencil, Trash2, UserCog } from "lucide-react";
-import { hostsApi } from "@/lib/api";
-import type { MeetingHost } from "@/lib/types";
-import AdminCard, {
-  AdminPageHeader,
-  FormField,
-  FormModal,
-  PrimaryButton,
-  StatusBadge,
-  inputStyle,
-} from "@/components/admin/AdminCard";
+import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
+import {
+  Plus,
+  Pencil,
+  UserCircle,
+  AlertCircle,
+  Check,
+  X,
+  ImageIcon,
+} from "lucide-react";
+import Modal from "@/components/ui/Modal";
+import ImageUpload from "@/components/ui/ImageUpload";
+import {
+  getHosts,
+  createHost,
+  updateHost,
+  deleteHost,
+  uploadHostImage,
+  deleteHostImage,
+} from "@/lib/api";
+import { assetUrl } from "@/lib/api";
+import type { MeetingHost, MeetingHostCreate } from "@/lib/types";
 
 export default function HostsPage() {
   const [hosts, setHosts] = useState<MeetingHost[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<MeetingHost | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", display_name: "", email: "" });
+  const [imageModal, setImageModal] = useState<MeetingHost | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = async () => {
-    setLoading(true);
-    try {
-      setHosts(await hostsApi.list(true));
-    } finally {
+  const reload = () =>
+    getHosts(true).then((data) => {
+      setHosts(data);
       setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetch(); }, []);
-
-  const openCreate = () => {
-    setEditing(null);
-    setForm({ name: "", display_name: "", email: "" });
-    setError(null);
-    setModalOpen(true);
-  };
-
-  const openEdit = (host: MeetingHost) => {
-    setEditing(host);
-    setForm({
-      name: host.name,
-      display_name: host.display_name ?? "",
-      email: host.email ?? "",
     });
-    setError(null);
-    setModalOpen(true);
-  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
+  useEffect(() => {
+    reload();
+  }, []);
+
+  const handleSave = async (data: MeetingHostCreate) => {
     try {
       if (editing) {
-        await hostsApi.update(editing.id, {
-          name: form.name,
-          display_name: form.display_name || null,
-          email: form.email || null,
-        });
+        await updateHost(editing.id, data);
       } else {
-        await hostsApi.create({
-          name: form.name,
-          display_name: form.display_name || null,
-          email: form.email || null,
-        });
+        await createHost(data);
       }
       setModalOpen(false);
-      fetch();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save host.");
-    } finally {
-      setSaving(false);
+      setError(null);
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
     }
   };
 
   const handleToggle = async (host: MeetingHost) => {
-    try {
-      await hostsApi.update(host.id, { is_active: !host.is_active });
-      fetch();
-    } catch { /* ignore */ }
+    await updateHost(host.id, { is_active: !host.is_active });
+    reload();
   };
 
   return (
-    <>
-      <AdminPageHeader
-        title="Meeting Hosts"
-        description="Hosts are auto-synced from HubSpot owners. You can also create custom hosts."
-        action={
-          <PrimaryButton onClick={openCreate}>
-            <Plus size={14} /> New Custom Host
-          </PrimaryButton>
-        }
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-text">Hosts</h1>
+          <p className="text-sm text-text-muted mt-1">
+            Meeting hosts synced from HubSpot and custom entries
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setEditing(null);
+            setError(null);
+            setModalOpen(true);
+          }}
+          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add Host
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-24 rounded-2xl border border-border bg-surface animate-pulse"
+            />
+          ))}
+        </div>
+      ) : hosts.length === 0 ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <UserCircle className="h-12 w-12 text-text-muted/30 mb-3" />
+          <p className="font-semibold text-text mb-1">No hosts yet</p>
+          <p className="text-sm text-text-muted">
+            Sync with HubSpot or add a custom host
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <AnimatePresence>
+            {hosts.map((host, i) => {
+              const displayName = host.display_name ?? host.name;
+              const imgUrl = assetUrl(host.image_path);
+
+              return (
+                <motion.div
+                  key={host.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ delay: i * 0.04 }}
+                  className={`rounded-2xl border border-border bg-surface p-4 flex flex-col gap-3 ${
+                    !host.is_active ? "opacity-50" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-11 w-11 rounded-full overflow-hidden bg-primary-light shrink-0">
+                      {imgUrl ? (
+                        <Image
+                          src={imgUrl}
+                          alt={displayName}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-sm font-bold text-primary">
+                          {displayName[0]?.toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-text truncate">
+                        {displayName}
+                      </p>
+                      {host.email && (
+                        <p className="text-xs text-text-muted truncate">
+                          {host.email}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {host.is_custom ? (
+                          <span className="rounded-full bg-secondary-light text-secondary px-2 py-0.5 text-xs font-medium">
+                            Custom
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-primary-light text-primary px-2 py-0.5 text-xs font-medium">
+                            HubSpot
+                          </span>
+                        )}
+                        {!host.is_active && (
+                          <span className="rounded-full bg-surface-2 text-text-muted px-2 py-0.5 text-xs">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 pt-1 border-t border-border">
+                    <button
+                      onClick={() => {
+                        setEditing(host);
+                        setError(null);
+                        setModalOpen(true);
+                      }}
+                      className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs text-text-muted hover:bg-surface-2 hover:text-text transition-colors"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setImageModal(host)}
+                      className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs text-text-muted hover:bg-surface-2 hover:text-text transition-colors"
+                    >
+                      <ImageIcon className="h-3 w-3" />
+                      Photo
+                    </button>
+                    <button
+                      onClick={() => handleToggle(host)}
+                      className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs text-text-muted hover:bg-surface-2 transition-colors ml-auto"
+                    >
+                      {host.is_active ? (
+                        <X className="h-3 w-3" />
+                      ) : (
+                        <Check className="h-3 w-3" />
+                      )}
+                      {host.is_active ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Edit/Create modal */}
+      <HostModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSave={handleSave}
+        editing={editing}
+        error={error}
       />
 
-      <AdminCard title="All Hosts">
-        {loading ? (
-          <LoadingRows />
-        ) : hosts.length === 0 ? (
-          <EmptyRow message="No hosts found. Sync from HubSpot or create a custom host." />
-        ) : (
-          <div>
-            {hosts.map((host, i) => (
-              <motion.div
-                key={host.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "16px",
-                  padding: "14px 24px",
-                  borderBottom: i < hosts.length - 1 ? "1px solid var(--border)" : "none",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div
-                  style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "50%",
-                    background: host.is_custom
-                      ? "linear-gradient(135deg, var(--secondary), var(--primary))"
-                      : "linear-gradient(135deg, var(--primary), var(--primary-dark))",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <UserCog size={16} color="white" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <p style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>
-                      {host.display_name ?? host.name}
-                    </p>
-                    {host.display_name && (
-                      <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                        ({host.name})
-                      </span>
-                    )}
-                    {host.is_custom && (
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          padding: "2px 7px",
-                          borderRadius: "var(--radius-pill)",
-                          background: "color-mix(in srgb, var(--secondary) 12%, transparent)",
-                          color: "var(--secondary)",
-                        }}
-                      >
-                        Custom
-                      </span>
-                    )}
-                  </div>
-                  {host.email && (
-                    <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
-                      {host.email}
-                    </p>
-                  )}
-                </div>
-                <StatusBadge active={host.is_active} />
-                <div style={{ display: "flex", gap: "6px", marginLeft: "8px" }}>
-                  <IconButton onClick={() => openEdit(host)} title="Edit">
-                    <Pencil size={14} />
-                  </IconButton>
-                  <IconButton
-                    onClick={() => handleToggle(host)}
-                    title={host.is_active ? "Deactivate" : "Activate"}
-                    danger={host.is_active}
-                  >
-                    <Trash2 size={14} />
-                  </IconButton>
-                </div>
-              </motion.div>
-            ))}
+      {/* Image upload modal */}
+      <Modal
+        open={!!imageModal}
+        onClose={() => {
+          setImageModal(null);
+          reload();
+        }}
+        title={`Photo — ${imageModal?.display_name ?? imageModal?.name ?? ""}`}
+        size="sm"
+      >
+        {imageModal && (
+          <div className="p-6">
+            <ImageUpload
+              currentImageUrl={assetUrl(imageModal.image_path)}
+              aspectRatio="square"
+              label="Host profile photo"
+              onUpload={async (file) => {
+                const updated = await uploadHostImage(imageModal.id, file);
+                setImageModal(updated);
+                reload();
+              }}
+              onRemove={async () => {
+                const updated = await deleteHostImage(imageModal.id);
+                setImageModal(updated);
+                reload();
+              }}
+            />
           </div>
         )}
-      </AdminCard>
+      </Modal>
+    </div>
+  );
+}
 
-      <AnimatePresence>
-        {modalOpen && (
-          <FormModal
-            title={editing ? "Edit Host" : "New Custom Host"}
-            onClose={() => setModalOpen(false)}
-            onSubmit={handleSubmit}
-            loading={saving}
-          >
-            <FormField label="Name" required>
-              <input
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                required
-                style={inputStyle}
-                placeholder="e.g. John Smith"
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
-            <FormField label="Display Name">
-              <input
-                value={form.display_name}
-                onChange={(e) => setForm((f) => ({ ...f, display_name: e.target.value }))}
-                style={inputStyle}
-                placeholder="Override display name"
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
-            <FormField label="Email">
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                style={inputStyle}
-                placeholder="host@company.com"
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
-            {error && (
-              <div
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: "8px",
-                  background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.2)",
-                  color: "#ef4444",
-                  fontSize: "13px",
-                }}
-              >
-                {error}
-              </div>
-            )}
-          </FormModal>
+function HostModal({
+  open,
+  onClose,
+  onSave,
+  editing,
+  error,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (data: MeetingHostCreate) => Promise<void>;
+  editing: MeetingHost | null;
+  error: string | null;
+}) {
+  const [name, setName] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(editing?.name ?? "");
+      setDisplayName(editing?.display_name ?? "");
+      setEmail(editing?.email ?? "");
+    }
+  }, [open, editing]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave({
+      name,
+      display_name: displayName || undefined,
+      email: email || undefined,
+    });
+    setSaving(false);
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={editing ? "Edit Host" : "New Host"} size="sm">
+      <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-error-bg px-3 py-2 text-sm text-error">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
         )}
-      </AnimatePresence>
-    </>
+
+        <Field label="Name">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className={inputCls}
+            placeholder="Jane Doe"
+          />
+        </Field>
+
+        <Field label="Display Name (optional)">
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            className={inputCls}
+            placeholder="Override shown in UI"
+          />
+        </Field>
+
+        <Field label="Email (optional)">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={inputCls}
+            placeholder="jane@company.com"
+          />
+        </Field>
+
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-text-muted hover:bg-surface-2 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60 transition-colors"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
-function IconButton({ onClick, title, danger, children }: { onClick: () => void; title: string; danger?: boolean; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <motion.button
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.9 }}
-      onClick={onClick}
-      title={title}
-      style={{
-        width: "30px",
-        height: "30px",
-        borderRadius: "8px",
-        border: "1px solid var(--border)",
-        background: "var(--bg-hover)",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: danger ? "#ef4444" : "var(--text-secondary)",
-      }}
-    >
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+        {label}
+      </label>
       {children}
-    </motion.button>
-  );
-}
-
-function LoadingRows() {
-  return (
-    <div>
-      {[1, 2, 3].map((i) => (
-        <motion.div
-          key={i}
-          animate={{ opacity: [0.5, 0.8, 0.5] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-          style={{ height: "60px", margin: "8px 24px", borderRadius: "8px", background: "var(--bg-hover)" }}
-        />
-      ))}
     </div>
   );
 }
 
-function EmptyRow({ message }: { message: string }) {
-  return (
-    <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--text-muted)", fontSize: "14px" }}>
-      {message}
-    </div>
-  );
-}
+const inputCls =
+  "w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors";

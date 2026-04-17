@@ -1,22 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Pencil, Trash2 } from "lucide-react";
-import { categoriesApi } from "@/lib/api";
-import type { Category } from "@/lib/types";
-import AdminCard, {
-  AdminPageHeader,
-  FormField,
-  FormModal,
-  PrimaryButton,
-  StatusBadge,
-  inputStyle,
-} from "@/components/admin/AdminCard";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Tag,
+  AlertCircle,
+  Check,
+  X,
+} from "lucide-react";
+import Modal from "@/components/ui/Modal";
+import {
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+} from "@/lib/api";
+import type { Category, CategoryCreate } from "@/lib/types";
 
 const PRESET_COLORS = [
-  "#01467f", "#7d1e4e", "#0ea5e9", "#10b981", "#f59e0b",
-  "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316",
+  "#01467f", "#7d1e4e", "#16a34a", "#d97706",
+  "#dc2626", "#7c3aed", "#0891b2", "#be123c",
 ];
 
 export default function CategoriesPage() {
@@ -24,308 +30,303 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", color: "#01467f", sort_order: 0 });
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = async () => {
-    setLoading(true);
-    try {
-      setCategories(await categoriesApi.list(true));
-    } finally {
+  const reload = () =>
+    getCategories(true).then((data) => {
+      setCategories(data);
       setLoading(false);
-    }
-  };
+    });
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => {
+    reload();
+  }, []);
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", description: "", color: "#01467f", sort_order: 0 });
     setError(null);
     setModalOpen(true);
   };
 
   const openEdit = (cat: Category) => {
     setEditing(cat);
-    setForm({
-      name: cat.name,
-      description: cat.description ?? "",
-      color: cat.color ?? "#01467f",
-      sort_order: cat.sort_order,
-    });
     setError(null);
     setModalOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
+  const handleSave = async (data: CategoryCreate) => {
     try {
       if (editing) {
-        await categoriesApi.update(editing.id, {
-          name: form.name,
-          description: form.description || null,
-          color: form.color,
-          sort_order: form.sort_order,
-        });
+        await updateCategory(editing.id, data);
       } else {
-        await categoriesApi.create({
-          name: form.name,
-          description: form.description || null,
-          color: form.color,
-          sort_order: form.sort_order,
-        });
+        await createCategory(data);
       }
       setModalOpen(false);
-      fetch();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save category.");
-    } finally {
-      setSaving(false);
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
     }
   };
 
   const handleToggle = async (cat: Category) => {
-    try {
-      await categoriesApi.update(cat.id, { is_active: !cat.is_active });
-      fetch();
-    } catch { /* ignore */ }
+    await updateCategory(cat.id, { is_active: !cat.is_active });
+    reload();
+  };
+
+  const handleDelete = async (cat: Category) => {
+    if (!confirm(`Deactivate "${cat.name}"?`)) return;
+    await deleteCategory(cat.id);
+    reload();
   };
 
   return (
-    <>
-      <AdminPageHeader
-        title="Categories"
-        description="Organise meeting links into booking categories."
-        action={
-          <PrimaryButton onClick={openCreate}>
-            <Plus size={14} /> New Category
-          </PrimaryButton>
-        }
-      />
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-text">Categories</h1>
+          <p className="text-sm text-text-muted mt-1">
+            Organise meetings into categories
+          </p>
+        </div>
+        <button
+          onClick={openCreate}
+          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Add Category
+        </button>
+      </div>
 
-      <AdminCard title="All Categories">
-        {loading ? (
-          <LoadingRows />
-        ) : categories.length === 0 ? (
-          <EmptyRow message="No categories yet. Create one to start organising meetings." />
-        ) : (
-          <div>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-28 rounded-2xl border border-border bg-surface animate-pulse"
+            />
+          ))}
+        </div>
+      ) : categories.length === 0 ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <Tag className="h-12 w-12 text-text-muted/30 mb-3" />
+          <p className="font-semibold text-text mb-1">No categories yet</p>
+          <p className="text-sm text-text-muted">Create one to get started</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <AnimatePresence>
             {categories.map((cat, i) => (
               <motion.div
                 key={cat.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
+                layout
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ delay: i * 0.04 }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "16px",
-                  padding: "14px 24px",
-                  borderBottom: i < categories.length - 1 ? "1px solid var(--border)" : "none",
-                  flexWrap: "wrap",
-                }}
+                className={`rounded-2xl border border-border bg-surface p-4 flex flex-col gap-3 ${
+                  !cat.is_active ? "opacity-50" : ""
+                }`}
               >
-                {/* Color swatch */}
-                <div
-                  style={{
-                    width: "14px",
-                    height: "14px",
-                    borderRadius: "50%",
-                    background: cat.color ?? "var(--primary)",
-                    flexShrink: 0,
-                    boxShadow: `0 0 0 3px ${(cat.color ?? "#01467f")}33`,
-                  }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>
-                    {cat.name}
-                  </p>
-                  {cat.description && (
-                    <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
-                      {cat.description}
-                    </p>
+                <div className="flex items-center gap-3">
+                  <div
+                    className="h-8 w-8 rounded-xl shrink-0"
+                    style={{ backgroundColor: cat.color ?? "#ccc" }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-text truncate">{cat.name}</p>
+                    {cat.description && (
+                      <p className="text-xs text-text-muted truncate">
+                        {cat.description}
+                      </p>
+                    )}
+                  </div>
+                  {!cat.is_active && (
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-text-muted shrink-0">
+                      Inactive
+                    </span>
                   )}
                 </div>
-                <span style={{ fontSize: "12px", color: "var(--text-muted)", marginRight: "8px" }}>
-                  order: {cat.sort_order}
-                </span>
-                <StatusBadge active={cat.is_active} />
-                <div style={{ display: "flex", gap: "6px", marginLeft: "8px" }}>
-                  <IconButton onClick={() => openEdit(cat)} title="Edit">
-                    <Pencil size={14} />
-                  </IconButton>
-                  <IconButton
-                    onClick={() => handleToggle(cat)}
-                    title={cat.is_active ? "Deactivate" : "Activate"}
-                    danger={cat.is_active}
+
+                <div className="flex items-center gap-1 pt-1 border-t border-border">
+                  <button
+                    onClick={() => openEdit(cat)}
+                    className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs text-text-muted hover:bg-surface-2 hover:text-text transition-colors"
                   >
-                    <Trash2 size={14} />
-                  </IconButton>
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleToggle(cat)}
+                    className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs text-text-muted hover:bg-surface-2 transition-colors"
+                  >
+                    {cat.is_active ? (
+                      <X className="h-3 w-3" />
+                    ) : (
+                      <Check className="h-3 w-3" />
+                    )}
+                    {cat.is_active ? "Deactivate" : "Activate"}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(cat)}
+                    className="ml-auto flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs text-text-muted hover:bg-error-bg hover:text-error transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
                 </div>
               </motion.div>
             ))}
-          </div>
-        )}
-      </AdminCard>
+          </AnimatePresence>
+        </div>
+      )}
 
-      <AnimatePresence>
-        {modalOpen && (
-          <FormModal
-            title={editing ? "Edit Category" : "New Category"}
-            onClose={() => setModalOpen(false)}
-            onSubmit={handleSubmit}
-            loading={saving}
-          >
-            <FormField label="Name" required>
-              <input
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                required
-                style={inputStyle}
-                placeholder="e.g. Consultation"
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
-
-            <FormField label="Description">
-              <input
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                style={inputStyle}
-                placeholder="Optional description"
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
-
-            <FormField label="Color">
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                {PRESET_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, color: c }))}
-                    style={{
-                      width: "28px",
-                      height: "28px",
-                      borderRadius: "50%",
-                      background: c,
-                      border: form.color === c ? "3px solid var(--text-primary)" : "2px solid transparent",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={form.color}
-                  onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-                  style={{ width: "28px", height: "28px", padding: "0", border: "none", borderRadius: "50%", cursor: "pointer" }}
-                  title="Custom color"
-                />
-              </div>
-            </FormField>
-
-            <FormField label="Sort Order">
-              <input
-                type="number"
-                value={form.sort_order}
-                onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))}
-                style={{ ...inputStyle, width: "100px" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-            </FormField>
-
-            {error && <ErrorMessage message={error} />}
-          </FormModal>
-        )}
-      </AnimatePresence>
-    </>
+      <CategoryModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSave={handleSave}
+        editing={editing}
+        error={error}
+      />
+    </div>
   );
 }
 
-function IconButton({
-  onClick,
-  title,
-  danger,
+function CategoryModal({
+  open,
+  onClose,
+  onSave,
+  editing,
+  error,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (data: CategoryCreate) => Promise<void>;
+  editing: Category | null;
+  error: string | null;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [color, setColor] = useState(PRESET_COLORS[0]);
+  const [sortOrder, setSortOrder] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(editing?.name ?? "");
+      setDescription(editing?.description ?? "");
+      setColor(editing?.color ?? PRESET_COLORS[0]);
+      setSortOrder(editing?.sort_order ?? 0);
+    }
+  }, [open, editing]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave({ name, description: description || undefined, color, sort_order: sortOrder });
+    setSaving(false);
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={editing ? "Edit Category" : "New Category"}
+      size="sm"
+    >
+      <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-error-bg px-3 py-2 text-sm text-error">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <Field label="Name">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className={inputCls}
+            placeholder="e.g. Sales"
+          />
+        </Field>
+
+        <Field label="Description">
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className={inputCls}
+            placeholder="Optional description"
+          />
+        </Field>
+
+        <Field label="Colour">
+          <div className="flex flex-wrap gap-2">
+            {PRESET_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                className={`h-7 w-7 rounded-full transition-transform ${
+                  color === c ? "ring-2 ring-offset-2 ring-primary scale-110" : ""
+                }`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="h-7 w-7 rounded-full cursor-pointer border-0 p-0"
+            />
+          </div>
+        </Field>
+
+        <Field label="Sort Order">
+          <input
+            type="number"
+            value={sortOrder}
+            onChange={(e) => setSortOrder(Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-text-muted hover:bg-surface-2 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60 transition-colors"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function Field({
+  label,
   children,
 }: {
-  onClick: () => void;
-  title: string;
-  danger?: boolean;
+  label: string;
   children: React.ReactNode;
 }) {
   return (
-    <motion.button
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.9 }}
-      onClick={onClick}
-      title={title}
-      style={{
-        width: "30px",
-        height: "30px",
-        borderRadius: "8px",
-        border: "1px solid var(--border)",
-        background: "var(--bg-hover)",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: danger ? "#ef4444" : "var(--text-secondary)",
-      }}
-    >
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+        {label}
+      </label>
       {children}
-    </motion.button>
-  );
-}
-
-function LoadingRows() {
-  return (
-    <div>
-      {[1, 2, 3].map((i) => (
-        <motion.div
-          key={i}
-          animate={{ opacity: [0.5, 0.8, 0.5] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-          style={{
-            height: "56px",
-            margin: "1px 24px",
-            borderRadius: "8px",
-            background: "var(--bg-hover)",
-            marginBottom: "8px",
-          }}
-        />
-      ))}
     </div>
   );
 }
 
-function EmptyRow({ message }: { message: string }) {
-  return (
-    <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--text-muted)", fontSize: "14px" }}>
-      {message}
-    </div>
-  );
-}
-
-function ErrorMessage({ message }: { message: string }) {
-  return (
-    <div
-      style={{
-        padding: "10px 12px",
-        borderRadius: "8px",
-        background: "rgba(239,68,68,0.08)",
-        border: "1px solid rgba(239,68,68,0.2)",
-        color: "#ef4444",
-        fontSize: "13px",
-      }}
-    >
-      {message}
-    </div>
-  );
-}
+const inputCls =
+  "w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors";

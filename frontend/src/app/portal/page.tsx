@@ -6,6 +6,7 @@ import { Search, CalendarX2, SlidersHorizontal, X } from "lucide-react";
 import CategoryFilter from "@/components/meetings/CategoryFilter";
 import MeetingCard from "@/components/meetings/MeetingCard";
 import BookingModal from "@/components/meetings/BookingModal";
+import Modal from "@/components/ui/Modal";
 import { getCategories, getHosts, getMeetings } from "@/lib/api";
 import type { Category, MeetingHost, MeetingLink } from "@/lib/types";
 
@@ -28,6 +29,7 @@ export default function PortalPage() {
   const [selectedHost, setSelectedHost] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [activeMeeting, setActiveMeeting] = useState<MeetingLink | null>(null);
+  const [activeNotesMeeting, setActiveNotesMeeting] = useState<MeetingLink | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -205,6 +207,7 @@ export default function PortalPage() {
                     <MeetingCard
                       meeting={meeting}
                       onClick={() => setActiveMeeting(meeting)}
+                      onViewNotes={meeting.notes ? () => setActiveNotesMeeting(meeting) : undefined}
                     />
                   </motion.div>
                 ))}
@@ -218,6 +221,30 @@ export default function PortalPage() {
         meeting={activeMeeting}
         onClose={() => setActiveMeeting(null)}
       />
+
+      <Modal
+        open={!!activeNotesMeeting}
+        onClose={() => setActiveNotesMeeting(null)}
+        title={activeNotesMeeting?.display_name ?? activeNotesMeeting?.name ?? ""}
+        size="sm"
+      >
+        {activeNotesMeeting && (
+          <div className="p-6 flex flex-col gap-4">
+            <p className="text-sm text-text leading-relaxed whitespace-pre-wrap">
+              {activeNotesMeeting.notes}
+            </p>
+            <button
+              onClick={() => {
+                setActiveMeeting(activeNotesMeeting);
+                setActiveNotesMeeting(null);
+              }}
+              className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover transition-colors"
+            >
+              Book Meeting
+            </button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

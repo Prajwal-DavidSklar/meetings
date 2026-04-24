@@ -1,8 +1,22 @@
 import logging
+from sqlalchemy import inspect, text
 from app.db.database import engine, Base
 from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_migrations() -> None:
+    inspector = inspect(engine)
+    try:
+        cols = {c["name"] for c in inspector.get_columns("meeting_links")}
+        if "notes" not in cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE meeting_links ADD COLUMN notes TEXT"))
+                conn.commit()
+            logger.info("Migration: added 'notes' column to meeting_links")
+    except Exception as e:
+        logger.warning("Migration check failed: %s", e)
 
 
 async def init_db() -> None:
@@ -24,6 +38,7 @@ async def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created / verified successfully")
+    _apply_migrations()
 
     # Ensure the uploads directory and sub-directories exist
     uploads_dir = settings.UPLOADS_DIR

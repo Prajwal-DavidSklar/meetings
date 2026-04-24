@@ -13,6 +13,9 @@ import {
   Eye,
   ChevronDown,
   X,
+  Plus,
+  FileText,
+  AlertCircle,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import ImageUpload from "@/components/ui/ImageUpload";
@@ -20,12 +23,19 @@ import {
   getMeetings,
   getCategories,
   getHosts,
+  createMeeting,
   updateMeeting,
   uploadMeetingImage,
   deleteMeetingImage,
 } from "@/lib/api";
 import { assetUrl } from "@/lib/api";
-import type { MeetingLink, MeetingLinkUpdate, Category, MeetingHost } from "@/lib/types";
+import type {
+  MeetingLink,
+  MeetingLinkCreate,
+  MeetingLinkUpdate,
+  Category,
+  MeetingHost,
+} from "@/lib/types";
 
 export default function AdminMeetingsPage() {
   const [meetings, setMeetings] = useState<MeetingLink[]>([]);
@@ -34,7 +44,10 @@ export default function AdminMeetingsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [imageModal, setImageModal] = useState<MeetingLink | null>(null);
+  const [notesModal, setNotesModal] = useState<MeetingLink | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
+  const [bulkLocking, setBulkLocking] = useState(false);
 
   const reload = async () => {
     const [ms, cats, hs] = await Promise.all([
@@ -70,13 +83,59 @@ export default function AdminMeetingsPage() {
     reload();
   };
 
+  const handleBulkLock = async (lock: boolean) => {
+    setBulkLocking(true);
+    await Promise.all(
+      meetings.map((m) => updateMeeting(m.id, { unlock_host_override: !lock }))
+    );
+    await reload();
+    setBulkLocking(false);
+  };
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text">Meetings</h1>
-        <p className="text-sm text-text-muted mt-1">
-          Manage all meeting links and their settings
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-text">Meetings</h1>
+          <p className="text-sm text-text-muted mt-1">
+            Manage all meeting links and their settings
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-xl border border-border overflow-hidden">
+            <button
+              onClick={() => handleBulkLock(true)}
+              disabled={bulkLocking || loading}
+              title="Lock all meetings — sync will not overwrite host assignments"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-text-muted hover:bg-surface-2 hover:text-text transition-colors disabled:opacity-40"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              Lock All
+            </button>
+            <div className="w-px self-stretch bg-border" />
+            <button
+              onClick={() => handleBulkLock(false)}
+              disabled={bulkLocking || loading}
+              title="Unlock all meetings — sync can freely update host assignments"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-text-muted hover:bg-surface-2 hover:text-text transition-colors disabled:opacity-40"
+            >
+              <Unlock className="h-3.5 w-3.5" />
+              Unlock All
+            </button>
+            {bulkLocking && (
+              <div className="px-2">
+                <span className="h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin block" />
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Meeting
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -141,6 +200,7 @@ export default function AdminMeetingsPage() {
                 hosts={hosts}
                 onUpdate={handleUpdate}
                 onImageClick={() => setImageModal(meeting)}
+                onNotesClick={() => setNotesModal(meeting)}
               />
             </motion.div>
           ))}
@@ -176,6 +236,37 @@ export default function AdminMeetingsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Notes modal */}
+      <Modal
+        open={!!notesModal}
+        onClose={() => setNotesModal(null)}
+        title={`Notes — ${notesModal?.display_name ?? notesModal?.name ?? ""}`}
+        size="sm"
+      >
+        {notesModal && (
+          <NotesEditor
+            initialNotes={notesModal.notes ?? ""}
+            onSave={async (notes) => {
+              await handleUpdate(notesModal.id, { notes });
+              setNotesModal(null);
+            }}
+            onCancel={() => setNotesModal(null)}
+          />
+        )}
+      </Modal>
+
+      {/* Create meeting modal */}
+      <CreateMeetingModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        categories={categories}
+        hosts={hosts}
+        onCreated={() => {
+          reload();
+          setShowCreateModal(false);
+        }}
+      />
     </div>
   );
 }
@@ -186,12 +277,14 @@ function MeetingRow({
   hosts,
   onUpdate,
   onImageClick,
+  onNotesClick,
 }: {
   meeting: MeetingLink;
   categories: Category[];
   hosts: MeetingHost[];
   onUpdate: (id: number, data: MeetingLinkUpdate) => Promise<void>;
   onImageClick: () => void;
+  onNotesClick: () => void;
 }) {
   const [displayName, setDisplayName] = useState(
     meeting.display_name ?? meeting.name
@@ -286,9 +379,7 @@ function MeetingRow({
         <div className="min-w-32">
           <SelectField
             value={String(meeting.category_id ?? "")}
-            onChange={(v) =>
-              save({ category_id: v ? Number(v) : null })
-            }
+            onChange={(v) => save({ category_id: v ? Number(v) : null })}
             placeholder="Category"
           >
             <option value="">No category</option>
@@ -306,7 +397,6 @@ function MeetingRow({
             value={String(meeting.host_id ?? "")}
             onChange={(v) => save({ host_id: v ? Number(v) : null })}
             placeholder="Host"
-            disabled={false}
           >
             <option value="">No host</option>
             {hosts.map((h) => (
@@ -315,7 +405,6 @@ function MeetingRow({
               </option>
             ))}
           </SelectField>
-          {/* Lock indicator */}
           <button
             title={
               meeting.host_override_locked
@@ -348,6 +437,17 @@ function MeetingRow({
         {/* Actions */}
         <div className="flex items-center gap-1 ml-auto">
           <button
+            onClick={onNotesClick}
+            className={`flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs transition-colors ${
+              meeting.notes
+                ? "text-secondary hover:bg-surface-2"
+                : "text-text-muted hover:bg-surface-2 hover:text-text"
+            }`}
+            title={meeting.notes ? "Edit notes" : "Add notes"}
+          >
+            <FileText className="h-3.5 w-3.5" />
+          </button>
+          <button
             onClick={onImageClick}
             className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs text-text-muted hover:bg-surface-2 hover:text-text transition-colors"
             title="Upload image"
@@ -378,6 +478,235 @@ function MeetingRow({
   );
 }
 
+function NotesEditor({
+  initialNotes,
+  onSave,
+  onCancel,
+}: {
+  initialNotes: string;
+  onSave: (notes: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [notes, setNotes] = useState(initialNotes);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(notes);
+    setSaving(false);
+  };
+
+  return (
+    <div className="p-6 flex flex-col gap-4">
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        rows={6}
+        autoFocus
+        className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors resize-none"
+        placeholder="Add notes visible to users on the meeting card…"
+      />
+      <div className="flex gap-2">
+        <button
+          onClick={onCancel}
+          className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-text-muted hover:bg-surface-2 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60 transition-colors"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CreateMeetingModal({
+  open,
+  onClose,
+  categories,
+  hosts,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  categories: Category[];
+  hosts: MeetingHost[];
+  onCreated: () => void;
+}) {
+  const emptyForm = {
+    name: "",
+    url: "",
+    display_name: "",
+    category_id: "",
+    host_id: "",
+    sort_order: "0",
+    notes: "",
+  };
+
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setForm(emptyForm);
+      setError("");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const set = (k: string, v: string) =>
+    setForm((prev) => ({ ...prev, [k]: v }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.url.trim()) {
+      setError("Name and URL are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload: MeetingLinkCreate = {
+        name: form.name.trim(),
+        url: form.url.trim(),
+        display_name: form.display_name.trim() || undefined,
+        category_id: form.category_id ? Number(form.category_id) : undefined,
+        host_id: form.host_id ? Number(form.host_id) : undefined,
+        sort_order: Number(form.sort_order) || 0,
+        notes: form.notes.trim() || undefined,
+      };
+      await createMeeting(payload);
+      onCreated();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to create meeting.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="New Meeting Link" size="md">
+      <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-error-bg px-3 py-2 text-sm text-error">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <Field label="Name *">
+          <input
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            required
+            className={inputCls}
+            placeholder="30-minute intro call"
+          />
+        </Field>
+
+        <Field label="Booking URL *">
+          <input
+            value={form.url}
+            onChange={(e) => set("url", e.target.value)}
+            required
+            type="url"
+            className={inputCls}
+            placeholder="https://meetings.hubspot.com/…"
+          />
+        </Field>
+
+        <Field label="Display Name (optional)">
+          <input
+            value={form.display_name}
+            onChange={(e) => set("display_name", e.target.value)}
+            className={inputCls}
+            placeholder="Override shown in UI"
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Category">
+            <div className="relative">
+              <select
+                value={form.category_id}
+                onChange={(e) => set("category_id", e.target.value)}
+                className={`${inputCls} appearance-none pr-7`}
+              >
+                <option value="">No category</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted" />
+            </div>
+          </Field>
+
+          <Field label="Host">
+            <div className="relative">
+              <select
+                value={form.host_id}
+                onChange={(e) => set("host_id", e.target.value)}
+                className={`${inputCls} appearance-none pr-7`}
+              >
+                <option value="">No host</option>
+                {hosts.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.display_name ?? h.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted" />
+            </div>
+          </Field>
+        </div>
+
+        <Field label="Sort Order">
+          <input
+            value={form.sort_order}
+            onChange={(e) => set("sort_order", e.target.value)}
+            type="number"
+            className={inputCls}
+            placeholder="0"
+          />
+        </Field>
+
+        <Field label="Notes (optional)">
+          <textarea
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            rows={3}
+            className={`${inputCls} resize-none`}
+            placeholder="Visible to users on the meeting card…"
+          />
+        </Field>
+
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-text-muted hover:bg-surface-2 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60 transition-colors"
+          >
+            {saving ? "Creating…" : "Create Meeting"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function SelectField({
   value,
   onChange,
@@ -405,3 +734,17 @@ function SelectField({
     </div>
   );
 }
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inputCls =
+  "w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors";

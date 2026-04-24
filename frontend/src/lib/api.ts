@@ -12,6 +12,7 @@ import type {
   MeetingHostCreate,
   MeetingHostUpdate,
   MeetingLink,
+  MeetingLinkCreate,
   MeetingLinkUpdate,
   SyncLog,
 } from "./types";
@@ -246,6 +247,13 @@ export async function getMeetings(
 
 export async function getMeeting(id: number): Promise<MeetingLink> {
   return request<MeetingLink>(`/meetings/${id}`);
+}
+
+export async function createMeeting(data: MeetingLinkCreate): Promise<MeetingLink> {
+  return request<MeetingLink>("/meetings", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 export async function updateMeeting(

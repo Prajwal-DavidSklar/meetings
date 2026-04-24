@@ -10,9 +10,10 @@ import { assetUrl } from "@/lib/api";
 interface MeetingCardProps {
   meeting: MeetingLink;
   onClick: () => void;
+  onViewNotes?: () => void;
 }
 
-export default function MeetingCard({ meeting, onClick }: MeetingCardProps) {
+export default function MeetingCard({ meeting, onClick, onViewNotes }: MeetingCardProps) {
   const [imgError, setImgError] = useState(false);
 
   const title = meeting.display_name ?? meeting.name;
@@ -104,9 +105,20 @@ export default function MeetingCard({ meeting, onClick }: MeetingCardProps) {
         )}
       </div>
 
-      {/* Book CTA */}
-      <div className="px-4 pb-4">
-        <div className="flex w-full items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* CTA */}
+      <div className="px-4 pb-4 flex gap-2">
+        {meeting.notes && onViewNotes && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); onViewNotes(); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onViewNotes(); } }}
+            className="flex-1 flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm font-semibold text-text-muted opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-2 hover:text-text cursor-pointer"
+          >
+            View Notes
+          </div>
+        )}
+        <div className={`${meeting.notes && onViewNotes ? "flex-1" : "w-full"} flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white opacity-0 group-hover:opacity-100 transition-opacity`}>
           Book Meeting
         </div>
       </div>

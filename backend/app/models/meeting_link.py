@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.database import Base
@@ -25,6 +25,7 @@ class MeetingLink(Base):
     # Set automatically when admin manually changes the host.
 
     image_path = Column(String, nullable=True)         # Relative path under /uploads
+    notes = Column(Text, nullable=True)                # Admin-authored notes shown to users
 
     is_active = Column(Boolean, default=True, nullable=False)
     sort_order = Column(Integer, default=0, nullable=False)

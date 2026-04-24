@@ -27,7 +27,7 @@ from app.db.database import get_db
 from app.models.meeting_link import MeetingLink
 from app.models.sync_log import SyncLog
 from app.models.user import User
-from app.schemas.meeting_link import MeetingLinkResponse, MeetingLinkUpdate, SyncLogResponse
+from app.schemas.meeting_link import MeetingLinkCreate, MeetingLinkResponse, MeetingLinkUpdate, SyncLogResponse
 from app.services.hubspot_service import sync_meeting_links
 
 logger = logging.getLogger(__name__)
@@ -75,6 +75,32 @@ def list_meetings(
 
 
 # ---------------------------------------------------------------------------
+# Create (admin)
+# ---------------------------------------------------------------------------
+
+@router.post("/", response_model=MeetingLinkResponse, status_code=status.HTTP_201_CREATED, summary="Create a manual meeting link")
+def create_meeting(
+    body: MeetingLinkCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    link = MeetingLink(
+        name=body.name,
+        url=body.url,
+        display_name=body.display_name or None,
+        category_id=body.category_id,
+        host_id=body.host_id,
+        sort_order=body.sort_order,
+        notes=body.notes or None,
+        is_active=True,
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+    return link
+
+
+# ---------------------------------------------------------------------------
 # Detail
 # ---------------------------------------------------------------------------
 
@@ -115,14 +141,17 @@ def update_meeting(
         link.host_id = body.host_id
         link.host_override_locked = True   # auto-lock so sync won't override
 
-    if body.unlock_host_override is True:
-        link.host_override_locked = False
+    if body.unlock_host_override is not None:
+        link.host_override_locked = not body.unlock_host_override
 
     if body.sort_order is not None:
         link.sort_order = body.sort_order
 
     if body.is_active is not None:
         link.is_active = body.is_active
+
+    if body.notes is not None:
+        link.notes = body.notes or None  # empty string → None
 
     db.commit()
     db.refresh(link)

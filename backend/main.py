@@ -108,4 +108,4 @@ if __name__ == "__main__":
         )
     else:
         logger.info("No SSL certificates found — starting HTTP server")
-        uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+        uvicorn.run("main:app", host="0.0.0.0", port=8009, reload=True)

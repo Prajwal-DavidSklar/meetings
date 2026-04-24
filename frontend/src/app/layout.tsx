@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { Montserrat } from "next/font/google";
+
+const montserrat = Montserrat({
+  weight: ["400", "600"],
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "Meetings Portal",
@@ -32,7 +38,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>
+      <body className={`${montserrat.className}`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

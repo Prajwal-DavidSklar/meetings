@@ -16,7 +16,8 @@ import type {
   SyncLog,
 } from "./types";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "https://192.168.0.230:8000";
 const API = `${BASE_URL}/api/v1`;
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ async function doRefresh(): Promise<boolean> {
 async function request<T>(
   path: string,
   options: RequestInit = {},
-  isRetry = false
+  isRetry = false,
 ): Promise<T> {
   const token = getAccessToken();
   const headers: Record<string, string> = {
@@ -129,7 +130,7 @@ export async function getMicrosoftLoginUrl(): Promise<MicrosoftLoginResponse> {
 
 export async function microsoftCallback(
   code: string,
-  state: string
+  state: string,
 ): Promise<Token> {
   return request<Token>("/auth/microsoft/callback", {
     method: "POST",
@@ -144,11 +145,9 @@ export async function getMe(): Promise<User> {
 // ─── Categories ───────────────────────────────────────────────────────────────
 
 export async function getCategories(
-  includeInactive = false
+  includeInactive = false,
 ): Promise<Category[]> {
-  return request<Category[]>(
-    `/categories?include_inactive=${includeInactive}`
-  );
+  return request<Category[]>(`/categories?include_inactive=${includeInactive}`);
 }
 
 export async function createCategory(data: CategoryCreate): Promise<Category> {
@@ -160,7 +159,7 @@ export async function createCategory(data: CategoryCreate): Promise<Category> {
 
 export async function updateCategory(
   id: number,
-  data: CategoryUpdate
+  data: CategoryUpdate,
 ): Promise<Category> {
   return request<Category>(`/categories/${id}`, {
     method: "PUT",
@@ -174,11 +173,15 @@ export async function deleteCategory(id: number): Promise<void> {
 
 // ─── Hosts ────────────────────────────────────────────────────────────────────
 
-export async function getHosts(includeInactive = false): Promise<MeetingHost[]> {
+export async function getHosts(
+  includeInactive = false,
+): Promise<MeetingHost[]> {
   return request<MeetingHost[]>(`/hosts?include_inactive=${includeInactive}`);
 }
 
-export async function createHost(data: MeetingHostCreate): Promise<MeetingHost> {
+export async function createHost(
+  data: MeetingHostCreate,
+): Promise<MeetingHost> {
   return request<MeetingHost>("/hosts", {
     method: "POST",
     body: JSON.stringify(data),
@@ -187,7 +190,7 @@ export async function createHost(data: MeetingHostCreate): Promise<MeetingHost> 
 
 export async function updateHost(
   id: number,
-  data: MeetingHostUpdate
+  data: MeetingHostUpdate,
 ): Promise<MeetingHost> {
   return request<MeetingHost>(`/hosts/${id}`, {
     method: "PUT",
@@ -201,7 +204,7 @@ export async function deleteHost(id: number): Promise<void> {
 
 export async function uploadHostImage(
   id: number,
-  file: File
+  file: File,
 ): Promise<MeetingHost> {
   const form = new FormData();
   form.append("file", file);
@@ -227,16 +230,14 @@ export interface MeetingFilters {
 }
 
 export async function getMeetings(
-  filters: MeetingFilters = {}
+  filters: MeetingFilters = {},
 ): Promise<MeetingLink[]> {
   const params = new URLSearchParams();
   if (filters.category_id != null)
     params.set("category_id", String(filters.category_id));
-  if (filters.host_id != null)
-    params.set("host_id", String(filters.host_id));
+  if (filters.host_id != null) params.set("host_id", String(filters.host_id));
   if (filters.search) params.set("search", filters.search);
-  if (filters.include_inactive)
-    params.set("include_inactive", "true");
+  if (filters.include_inactive) params.set("include_inactive", "true");
   if (filters.skip != null) params.set("skip", String(filters.skip));
   if (filters.limit != null) params.set("limit", String(filters.limit));
   const qs = params.toString();
@@ -249,7 +250,7 @@ export async function getMeeting(id: number): Promise<MeetingLink> {
 
 export async function updateMeeting(
   id: number,
-  data: MeetingLinkUpdate
+  data: MeetingLinkUpdate,
 ): Promise<MeetingLink> {
   return request<MeetingLink>(`/meetings/${id}`, {
     method: "PUT",
@@ -259,7 +260,7 @@ export async function updateMeeting(
 
 export async function uploadMeetingImage(
   id: number,
-  file: File
+  file: File,
 ): Promise<MeetingLink> {
   const form = new FormData();
   form.append("file", file);
@@ -279,19 +280,13 @@ export async function triggerSync(): Promise<SyncLog> {
   return request<SyncLog>("/meetings/sync", { method: "POST" });
 }
 
-export async function getSyncLogs(
-  skip = 0,
-  limit = 50
-): Promise<SyncLog[]> {
+export async function getSyncLogs(skip = 0, limit = 50): Promise<SyncLog[]> {
   return request<SyncLog[]>(`/meetings/sync/logs?skip=${skip}&limit=${limit}`);
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
-export async function getUsers(
-  skip = 0,
-  limit = 100
-): Promise<User[]> {
+export async function getUsers(skip = 0, limit = 100): Promise<User[]> {
   return request<User[]>(`/users?skip=${skip}&limit=${limit}`);
 }
 
@@ -302,10 +297,7 @@ export async function createUser(data: UserCreate): Promise<User> {
   });
 }
 
-export async function updateUser(
-  id: number,
-  data: UserUpdate
-): Promise<User> {
+export async function updateUser(id: number, data: UserUpdate): Promise<User> {
   return request<User>(`/users/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),

@@ -41,6 +41,26 @@ export default function PortalPage() {
     );
   }, []);
 
+  const availableHosts = useMemo(() => {
+    if (!selectedCategory) return hosts;
+    const hostIds = new Set(
+      meetings
+        .filter((m) => m.category_id === selectedCategory && m.host_id !== null)
+        .map((m) => m.host_id as number)
+    );
+    return hosts.filter((h) => hostIds.has(h.id));
+  }, [selectedCategory, meetings, hosts]);
+
+  const handleCategoryChange = (id: number | null) => {
+    setSelectedCategory(id);
+    if (id !== null && selectedHost !== null) {
+      const hostStillAvailable = meetings.some(
+        (m) => m.category_id === id && m.host_id === selectedHost
+      );
+      if (!hostStillAvailable) setSelectedHost(null);
+    }
+  };
+
   const filtered = useMemo(() => {
     return meetings.filter((m) => {
       if (selectedCategory && m.category_id !== selectedCategory) return false;
@@ -108,10 +128,10 @@ export default function PortalPage() {
           <div className="sticky top-24">
             <CategoryFilter
               categories={categories}
-              hosts={hosts}
+              hosts={availableHosts}
               selectedCategory={selectedCategory}
               selectedHost={selectedHost}
-              onCategoryChange={setSelectedCategory}
+              onCategoryChange={handleCategoryChange}
               onHostChange={setSelectedHost}
             />
           </div>
@@ -142,11 +162,11 @@ export default function PortalPage() {
               </div>
               <CategoryFilter
                 categories={categories}
-                hosts={hosts}
+                hosts={availableHosts}
                 selectedCategory={selectedCategory}
                 selectedHost={selectedHost}
                 onCategoryChange={(id) => {
-                  setSelectedCategory(id);
+                  handleCategoryChange(id);
                   setSidebarOpen(false);
                 }}
                 onHostChange={(id) => {

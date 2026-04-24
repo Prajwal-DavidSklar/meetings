@@ -54,7 +54,7 @@ export default function CategoryFilter({
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
             Hosts
           </p>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col py-2 gap-1 max-h-[50vh] overflow-y-scroll">
             <FilterChip
               label="All hosts"
               active={selectedHost === null}

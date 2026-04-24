@@ -85,7 +85,7 @@ export default function Header() {
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
                 {user?.name?.[0]?.toUpperCase() ?? "U"}
               </span>
-              <span className="hidden sm:block max-w-[120px] truncate">
+              <span className="hidden sm:block max-w-30 truncate">
                 {user?.name}
               </span>
               {isAdmin && (
@@ -104,7 +104,7 @@ export default function Header() {
                     onClick={() => setUserDropOpen(false)}
                   />
                   <motion.div
-                    className="absolute right-0 top-full mt-2 z-20 min-w-[200px] rounded-2xl border border-border bg-background shadow-xl p-1"
+                    className="absolute right-0 top-full mt-2 z-20 min-w-50 rounded-2xl border border-border bg-background shadow-xl p-1"
                     initial={{ opacity: 0, scale: 0.95, y: -8 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: -8 }}

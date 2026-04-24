@@ -57,13 +57,13 @@ export default function MeetingCard({ meeting, onClick }: MeetingCardProps) {
         {/* Host avatar overlay */}
         {meeting.host && (
           <div className="absolute bottom-2 right-2">
-            <div className="h-9 w-9 rounded-full border-2 border-white/80 bg-surface overflow-hidden shadow-md">
+            <div className="h-19 w-19 rounded-full border-2 border-white/80 bg-surface overflow-hidden shadow-md">
               {hostImg ? (
                 <Image
                   src={hostImg}
                   alt={hostName ?? "Host"}
                   fill
-                  className="object-cover"
+                  className="object-cover rounded-full"
                   unoptimized
                 />
               ) : (

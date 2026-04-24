@@ -321,5 +321,7 @@ export async function deleteUser(id: number): Promise<void> {
 export function assetUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith("http")) return path;
-  return `${BASE_URL}/${path.replace(/^\//, "")}`;
+  // Prepend the API base (includes /api/v1) so the reverse proxy forwards
+  // /api/v1/uploads/** to FastAPI instead of letting Next.js handle it.
+  return `${API}/${path.replace(/^\//, "")}`;
 }

@@ -75,10 +75,11 @@ def create_main_application() -> FastAPI:
     from app.api.router import api_router
     app.include_router(api_router)
 
-    # Serve uploaded images at /uploads/…
+    # Serve uploaded images at /api/v1/uploads/… (must be under /api/v1 so
+    # the reverse proxy forwards these requests to FastAPI, not Next.js)
     uploads_dir = settings.UPLOADS_DIR
     uploads_dir.mkdir(parents=True, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+    app.mount("/api/v1/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
     # Health check
     @app.get("/health", tags=["health"])

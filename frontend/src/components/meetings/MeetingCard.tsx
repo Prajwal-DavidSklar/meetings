@@ -16,8 +16,7 @@ export default function MeetingCard({ meeting, onClick }: MeetingCardProps) {
   const [imgError, setImgError] = useState(false);
 
   const title = meeting.display_name ?? meeting.name;
-  const hostName =
-    meeting.host?.display_name ?? meeting.host?.name ?? null;
+  const hostName = meeting.host?.display_name ?? meeting.host?.name ?? null;
   const meetingImg = !imgError ? assetUrl(meeting.image_path) : null;
   const hostImg = assetUrl(meeting.host?.image_path);
   const categoryColor = meeting.category?.color ?? "#01467f";
@@ -72,9 +71,7 @@ export default function MeetingCard({ meeting, onClick }: MeetingCardProps) {
                   className="flex h-full w-full items-center justify-center text-xs font-bold text-white"
                   style={{ backgroundColor: categoryColor }}
                 >
-                  {hostName?.[0]?.toUpperCase() ?? (
-                    <User className="h-4 w-4" />
-                  )}
+                  {hostName?.[0]?.toUpperCase() ?? <User className="h-4 w-4" />}
                 </div>
               )}
             </div>
@@ -96,7 +93,7 @@ export default function MeetingCard({ meeting, onClick }: MeetingCardProps) {
 
       {/* Content */}
       <div className="flex flex-1 flex-col gap-1.5 p-4">
-        <h3 className="font-semibold text-text leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+        <h3 className="font-semibold text-text leading-snug line-clamp-2 group-hover:text-primary transition-colors dark:group-hover:text-white">
           {title}
         </h3>
         {hostName && (

@@ -95,8 +95,8 @@ function FilterChip({
       onClick={onClick}
       className={`relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-left transition-colors w-full ${
         active
-          ? "bg-primary-light text-primary"
-          : "text-text-muted hover:bg-surface-2 hover:text-text"
+          ? "bg-primary-light text-primary dark:text-white"
+          : "text-text-muted hover:bg-surface-2 hover:text-text hover:dark:text-white"
       }`}
     >
       {color && (

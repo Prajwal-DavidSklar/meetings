@@ -55,7 +55,7 @@ export default function Header() {
               href={href}
               className={`relative flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                 isActive(href)
-                  ? "bg-primary-light text-primary"
+                  ? "bg-primary-light dark:bg-blue-900 text-primary dark:text-white"
                   : "text-text-muted hover:bg-surface-2 hover:text-text"
               }`}
             >
@@ -64,7 +64,7 @@ export default function Header() {
               {isActive(href) && (
                 <motion.div
                   layoutId="nav-indicator"
-                  className="absolute inset-0 rounded-full bg-primary-light -z-10"
+                  className="absolute inset-0 rounded-full bg-primary-light -z-10 dark:text-white"
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 />
               )}
@@ -149,7 +149,11 @@ export default function Header() {
             onClick={() => setMenuOpen((v) => !v)}
             className="flex md:hidden h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-text-muted hover:text-text transition-colors"
           >
-            {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            {menuOpen ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Menu className="h-4 w-4" />
+            )}
           </button>
         </div>
       </div>

@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import LoadingScreen from "@/components/layout/LoadingScreen";
 import { microsoftCallback } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function AuthCallbackPage() {
+function AuthCallback() {
   const router = useRouter();
   const params = useSearchParams();
   const { login } = useAuth();
@@ -59,5 +59,19 @@ export default function AuthCallbackPage() {
     <AnimatePresence>
       <LoadingScreen />
     </AnimatePresence>
+  );
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <AnimatePresence>
+          <LoadingScreen />
+        </AnimatePresence>
+      }
+    >
+      <AuthCallback />
+    </Suspense>
   );
 }

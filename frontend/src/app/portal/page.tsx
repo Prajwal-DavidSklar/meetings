@@ -10,6 +10,22 @@ import Modal from "@/components/ui/Modal";
 import { getCategories, getHosts, getMeetings } from "@/lib/api";
 import type { Category, MeetingHost, MeetingLink } from "@/lib/types";
 
+type MeetingType = "all" | "teams" | "phone" | "in-person";
+
+const MEETING_TYPE_TABS: { value: MeetingType; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "teams", label: "Teams" },
+  { value: "phone", label: "Phone" },
+  { value: "in-person", label: "In-person" },
+];
+
+function getMeetingType(meeting: MeetingLink): "teams" | "phone" | "in-person" {
+  const name = (meeting.display_name ?? meeting.name).toLowerCase();
+  if (name.includes("teams")) return "teams";
+  if (name.includes("phone")) return "phone";
+  return "in-person";
+}
+
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
@@ -28,6 +44,7 @@ export default function PortalPage() {
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [selectedHost, setSelectedHost] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  const [meetingType, setMeetingType] = useState<MeetingType>("all");
   const [activeMeeting, setActiveMeeting] = useState<MeetingLink | null>(null);
   const [activeNotesMeeting, setActiveNotesMeeting] = useState<MeetingLink | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -63,7 +80,7 @@ export default function PortalPage() {
     }
   };
 
-  const filtered = useMemo(() => {
+  const baseFiltered = useMemo(() => {
     return meetings.filter((m) => {
       if (selectedCategory && m.category_id !== selectedCategory) return false;
       if (selectedHost && m.host_id !== selectedHost) return false;
@@ -76,12 +93,24 @@ export default function PortalPage() {
     });
   }, [meetings, selectedCategory, selectedHost, search]);
 
-  const hasFilters = selectedCategory !== null || selectedHost !== null || search;
+  const tabCounts = useMemo(() => {
+    const counts: Record<MeetingType, number> = { all: baseFiltered.length, teams: 0, phone: 0, "in-person": 0 };
+    for (const m of baseFiltered) counts[getMeetingType(m)]++;
+    return counts;
+  }, [baseFiltered]);
+
+  const filtered = useMemo(() => {
+    if (meetingType === "all") return baseFiltered;
+    return baseFiltered.filter((m) => getMeetingType(m) === meetingType);
+  }, [baseFiltered, meetingType]);
+
+  const hasFilters = selectedCategory !== null || selectedHost !== null || !!search || meetingType !== "all";
 
   const clearFilters = () => {
     setSelectedCategory(null);
     setSelectedHost(null);
     setSearch("");
+    setMeetingType("all");
   };
 
   return (
@@ -122,6 +151,35 @@ export default function PortalPage() {
             Clear filters
           </button>
         )}
+      </div>
+
+      {/* Meeting type tabs */}
+      <div className="flex gap-0 mb-6 border-b border-border">
+        {MEETING_TYPE_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => setMeetingType(tab.value)}
+            className={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
+              meetingType === tab.value
+                ? "text-primary"
+                : "text-text-muted hover:text-text"
+            }`}
+          >
+            {tab.label}
+            {tabCounts[tab.value] > 0 && (
+              <span className={`ml-1.5 text-xs ${meetingType === tab.value ? "text-primary/70" : "text-text-muted/60"}`}>
+                {tabCounts[tab.value]}
+              </span>
+            )}
+            {meetingType === tab.value && (
+              <motion.div
+                layoutId="meeting-type-tab-indicator"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"
+                transition={{ type: "spring", stiffness: 400, damping: 35 }}
+              />
+            )}
+          </button>
+        ))}
       </div>
 
       <div className="flex gap-6">

@@ -26,14 +26,6 @@ function getMeetingType(meeting: MeetingLink): "teams" | "phone" | "in-person" {
   return "in-person";
 }
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.05, duration: 0.4, ease: "easeOut" as const },
-  }),
-};
 
 export default function PortalPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -268,13 +260,13 @@ export default function PortalPage() {
                 {filtered.length} meeting{filtered.length !== 1 ? "s" : ""}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filtered.map((meeting, i) => (
+                {filtered.map((meeting) => (
                   <motion.div
                     key={meeting.id}
-                    custom={i}
-                    variants={cardVariants}
-                    initial="hidden"
-                    animate="visible"
+                    layout
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
                   >
                     <MeetingCard
                       meeting={meeting}

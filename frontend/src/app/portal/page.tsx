@@ -46,7 +46,8 @@ export default function PortalPage() {
   const [search, setSearch] = useState("");
   const [meetingType, setMeetingType] = useState<MeetingType>("all");
   const [activeMeeting, setActiveMeeting] = useState<MeetingLink | null>(null);
-  const [activeNotesMeeting, setActiveNotesMeeting] = useState<MeetingLink | null>(null);
+  const [activeNotesMeeting, setActiveNotesMeeting] =
+    useState<MeetingLink | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -56,7 +57,7 @@ export default function PortalPage() {
         setHosts(hs);
         setMeetings(ms);
         setLoading(false);
-      }
+      },
     );
   }, []);
 
@@ -65,7 +66,7 @@ export default function PortalPage() {
     const hostIds = new Set(
       meetings
         .filter((m) => m.category_id === selectedCategory && m.host_id !== null)
-        .map((m) => m.host_id as number)
+        .map((m) => m.host_id as number),
     );
     return hosts.filter((h) => hostIds.has(h.id));
   }, [selectedCategory, meetings, hosts]);
@@ -74,7 +75,7 @@ export default function PortalPage() {
     setSelectedCategory(id);
     if (id !== null && selectedHost !== null) {
       const hostStillAvailable = meetings.some(
-        (m) => m.category_id === id && m.host_id === selectedHost
+        (m) => m.category_id === id && m.host_id === selectedHost,
       );
       if (!hostStillAvailable) setSelectedHost(null);
     }
@@ -94,7 +95,12 @@ export default function PortalPage() {
   }, [meetings, selectedCategory, selectedHost, search]);
 
   const tabCounts = useMemo(() => {
-    const counts: Record<MeetingType, number> = { all: baseFiltered.length, teams: 0, phone: 0, "in-person": 0 };
+    const counts: Record<MeetingType, number> = {
+      all: baseFiltered.length,
+      teams: 0,
+      phone: 0,
+      "in-person": 0,
+    };
     for (const m of baseFiltered) counts[getMeetingType(m)]++;
     return counts;
   }, [baseFiltered]);
@@ -104,7 +110,11 @@ export default function PortalPage() {
     return baseFiltered.filter((m) => getMeetingType(m) === meetingType);
   }, [baseFiltered, meetingType]);
 
-  const hasFilters = selectedCategory !== null || selectedHost !== null || !!search || meetingType !== "all";
+  const hasFilters =
+    selectedCategory !== null ||
+    selectedHost !== null ||
+    !!search ||
+    meetingType !== "all";
 
   const clearFilters = () => {
     setSelectedCategory(null);
@@ -137,7 +147,9 @@ export default function PortalPage() {
           Filters
           {hasFilters && (
             <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-white font-bold">
-              {(selectedCategory ? 1 : 0) + (selectedHost ? 1 : 0) + (search ? 1 : 0)}
+              {(selectedCategory ? 1 : 0) +
+                (selectedHost ? 1 : 0) +
+                (search ? 1 : 0)}
             </span>
           )}
         </button>
@@ -161,13 +173,15 @@ export default function PortalPage() {
             onClick={() => setMeetingType(tab.value)}
             className={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
               meetingType === tab.value
-                ? "text-primary"
+                ? "text-primary dark:text-white"
                 : "text-text-muted hover:text-text"
             }`}
           >
             {tab.label}
             {tabCounts[tab.value] > 0 && (
-              <span className={`ml-1.5 text-xs ${meetingType === tab.value ? "text-primary/70" : "text-text-muted/60"}`}>
+              <span
+                className={`ml-1.5 text-xs ${meetingType === tab.value ? "text-primary/70 dark:text-white/70" : "text-text-muted/60"}`}
+              >
                 {tabCounts[tab.value]}
               </span>
             )}
@@ -265,7 +279,11 @@ export default function PortalPage() {
                     <MeetingCard
                       meeting={meeting}
                       onClick={() => setActiveMeeting(meeting)}
-                      onViewNotes={meeting.notes ? () => setActiveNotesMeeting(meeting) : undefined}
+                      onViewNotes={
+                        meeting.notes
+                          ? () => setActiveNotesMeeting(meeting)
+                          : undefined
+                      }
                     />
                   </motion.div>
                 ))}
@@ -283,7 +301,9 @@ export default function PortalPage() {
       <Modal
         open={!!activeNotesMeeting}
         onClose={() => setActiveNotesMeeting(null)}
-        title={activeNotesMeeting?.display_name ?? activeNotesMeeting?.name ?? ""}
+        title={
+          activeNotesMeeting?.display_name ?? activeNotesMeeting?.name ?? ""
+        }
         size="sm"
       >
         {activeNotesMeeting && (

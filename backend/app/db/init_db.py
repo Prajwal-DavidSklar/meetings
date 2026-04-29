@@ -15,6 +15,11 @@ def _apply_migrations() -> None:
                 conn.execute(text("ALTER TABLE meeting_links ADD COLUMN notes TEXT"))
                 conn.commit()
             logger.info("Migration: added 'notes' column to meeting_links")
+        if "hours" not in cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE meeting_links ADD COLUMN hours TEXT"))
+                conn.commit()
+            logger.info("Migration: added 'hours' column to meeting_links")
     except Exception as e:
         logger.warning("Migration check failed: %s", e)
 

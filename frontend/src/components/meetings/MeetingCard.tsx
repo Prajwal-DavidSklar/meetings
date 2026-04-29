@@ -105,21 +105,30 @@ export default function MeetingCard({ meeting, onClick, onViewNotes }: MeetingCa
         )}
       </div>
 
-      {/* CTA */}
-      <div className="px-4 pb-4 flex gap-2">
-        {meeting.notes && onViewNotes && (
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={(e) => { e.stopPropagation(); onViewNotes(); }}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onViewNotes(); } }}
-            className="flex-1 flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm font-semibold text-text-muted opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-2 hover:text-text cursor-pointer"
-          >
-            View Notes
+      {/* CTA — hours overlays the buttons at rest; buttons reveal on hover */}
+      <div className="px-4 pb-4">
+        <div className="relative flex gap-2">
+          {meeting.hours && (
+            <div className="absolute inset-0 flex items-center bg-surface transition-opacity duration-200 group-hover:opacity-0 pointer-events-none z-10">
+              <p className="text-xs font-semibold text-red-500 line-clamp-1">
+                {meeting.hours}
+              </p>
+            </div>
+          )}
+          {meeting.notes && onViewNotes && (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); onViewNotes(); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onViewNotes(); } }}
+              className="flex-1 flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm font-semibold text-text-muted opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-2 hover:text-text cursor-pointer"
+            >
+              View Notes
+            </div>
+          )}
+          <div className={`${meeting.notes && onViewNotes ? "flex-1" : "w-full"} flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white opacity-0 group-hover:opacity-100 transition-opacity`}>
+            Book Meeting
           </div>
-        )}
-        <div className={`${meeting.notes && onViewNotes ? "flex-1" : "w-full"} flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white opacity-0 group-hover:opacity-100 transition-opacity`}>
-          Book Meeting
         </div>
       </div>
     </motion.button>

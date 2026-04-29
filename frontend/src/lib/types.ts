@@ -117,6 +117,7 @@ export interface MeetingLink {
   host_override_locked: boolean;
   image_path: string | null;
   notes: string | null;
+  hours: string | null;
   sort_order: number;
   is_active: boolean;
   last_synced_at: string | null;
@@ -134,6 +135,7 @@ export interface MeetingLinkCreate {
   host_id?: number | null;
   sort_order?: number;
   notes?: string;
+  hours?: string;
 }
 
 export interface MeetingLinkUpdate {
@@ -143,6 +145,7 @@ export interface MeetingLinkUpdate {
   sort_order?: number;
   is_active?: boolean;
   notes?: string;
+  hours?: string;
   unlock_host_override?: boolean;
 }
 

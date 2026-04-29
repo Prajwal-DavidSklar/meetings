@@ -92,6 +92,7 @@ def create_meeting(
         host_id=body.host_id,
         sort_order=body.sort_order,
         notes=body.notes or None,
+        hours=body.hours or None,
         is_active=True,
     )
     db.add(link)
@@ -152,6 +153,9 @@ def update_meeting(
 
     if body.notes is not None:
         link.notes = body.notes or None  # empty string → None
+
+    if body.hours is not None:
+        link.hours = body.hours or None  # empty string → None
 
     db.commit()
     db.refresh(link)

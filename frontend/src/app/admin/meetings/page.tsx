@@ -15,6 +15,7 @@ import {
   X,
   Plus,
   FileText,
+  Clock,
   AlertCircle,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
@@ -45,6 +46,7 @@ export default function AdminMeetingsPage() {
   const [search, setSearch] = useState("");
   const [imageModal, setImageModal] = useState<MeetingLink | null>(null);
   const [notesModal, setNotesModal] = useState<MeetingLink | null>(null);
+  const [hoursModal, setHoursModal] = useState<MeetingLink | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
   const [bulkLocking, setBulkLocking] = useState(false);
@@ -201,6 +203,7 @@ export default function AdminMeetingsPage() {
                 onUpdate={handleUpdate}
                 onImageClick={() => setImageModal(meeting)}
                 onNotesClick={() => setNotesModal(meeting)}
+                onHoursClick={() => setHoursModal(meeting)}
               />
             </motion.div>
           ))}
@@ -256,6 +259,25 @@ export default function AdminMeetingsPage() {
         )}
       </Modal>
 
+      {/* Hours modal */}
+      <Modal
+        open={!!hoursModal}
+        onClose={() => setHoursModal(null)}
+        title={`Hours — ${hoursModal?.display_name ?? hoursModal?.name ?? ""}`}
+        size="sm"
+      >
+        {hoursModal && (
+          <HoursEditor
+            initialHours={hoursModal.hours ?? ""}
+            onSave={async (hours) => {
+              await handleUpdate(hoursModal.id, { hours });
+              setHoursModal(null);
+            }}
+            onCancel={() => setHoursModal(null)}
+          />
+        )}
+      </Modal>
+
       {/* Create meeting modal */}
       <CreateMeetingModal
         open={showCreateModal}
@@ -278,6 +300,7 @@ function MeetingRow({
   onUpdate,
   onImageClick,
   onNotesClick,
+  onHoursClick,
 }: {
   meeting: MeetingLink;
   categories: Category[];
@@ -285,6 +308,7 @@ function MeetingRow({
   onUpdate: (id: number, data: MeetingLinkUpdate) => Promise<void>;
   onImageClick: () => void;
   onNotesClick: () => void;
+  onHoursClick: () => void;
 }) {
   const [displayName, setDisplayName] = useState(
     meeting.display_name ?? meeting.name
@@ -448,6 +472,17 @@ function MeetingRow({
             <FileText className="h-3.5 w-3.5" />
           </button>
           <button
+            onClick={onHoursClick}
+            className={`flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs transition-colors ${
+              meeting.hours
+                ? "text-red-500 hover:bg-surface-2"
+                : "text-text-muted hover:bg-surface-2 hover:text-text"
+            }`}
+            title={meeting.hours ? "Edit hours" : "Add hours"}
+          >
+            <Clock className="h-3.5 w-3.5" />
+          </button>
+          <button
             onClick={onImageClick}
             className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs text-text-muted hover:bg-surface-2 hover:text-text transition-colors"
             title="Upload image"
@@ -525,6 +560,53 @@ function NotesEditor({
   );
 }
 
+function HoursEditor({
+  initialHours,
+  onSave,
+  onCancel,
+}: {
+  initialHours: string;
+  onSave: (hours: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [hours, setHours] = useState(initialHours);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(hours);
+    setSaving(false);
+  };
+
+  return (
+    <div className="p-6 flex flex-col gap-4">
+      <textarea
+        value={hours}
+        onChange={(e) => setHours(e.target.value)}
+        rows={3}
+        autoFocus
+        className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-text placeholder:text-text-muted/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors resize-none"
+        placeholder="e.g. Mon–Fri 9am–5pm AEST…"
+      />
+      <div className="flex gap-2">
+        <button
+          onClick={onCancel}
+          className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-text-muted hover:bg-surface-2 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60 transition-colors"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CreateMeetingModal({
   open,
   onClose,
@@ -544,8 +626,9 @@ function CreateMeetingModal({
     display_name: "",
     category_id: "",
     host_id: "",
-    sort_order: "0",
+    sort_order: "1",
     notes: "",
+    hours: "",
   };
 
   const [form, setForm] = useState(emptyForm);
@@ -577,8 +660,9 @@ function CreateMeetingModal({
         display_name: form.display_name.trim() || undefined,
         category_id: form.category_id ? Number(form.category_id) : undefined,
         host_id: form.host_id ? Number(form.host_id) : undefined,
-        sort_order: Number(form.sort_order) || 0,
+        sort_order: Number(form.sort_order),
         notes: form.notes.trim() || undefined,
+        hours: form.hours.trim() || undefined,
       };
       await createMeeting(payload);
       onCreated();
@@ -672,7 +756,7 @@ function CreateMeetingModal({
             onChange={(e) => set("sort_order", e.target.value)}
             type="number"
             className={inputCls}
-            placeholder="0"
+            placeholder="1"
           />
         </Field>
 
@@ -683,6 +767,16 @@ function CreateMeetingModal({
             rows={3}
             className={`${inputCls} resize-none`}
             placeholder="Visible to users on the meeting card…"
+          />
+        </Field>
+
+        <Field label="Hours (optional)">
+          <textarea
+            value={form.hours}
+            onChange={(e) => set("hours", e.target.value)}
+            rows={2}
+            className={`${inputCls} resize-none`}
+            placeholder="e.g. Mon–Fri 9am–5pm AEST…"
           />
         </Field>
 

@@ -26,9 +26,10 @@ class MeetingLink(Base):
 
     image_path = Column(String, nullable=True)         # Relative path under /uploads
     notes = Column(Text, nullable=True)                # Admin-authored notes shown to users
+    hours = Column(Text, nullable=True)                # Admin-authored hours shown on meeting card
 
     is_active = Column(Boolean, default=True, nullable=False)
-    sort_order = Column(Integer, default=0, nullable=False)
+    sort_order = Column(Integer, default=1, nullable=False)
 
     last_synced_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())

@@ -56,38 +56,59 @@ export default function MeetingCard({
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
     >
-      {/* ── Hero: host photo as the dominant element ── */}
-      <div className="relative flex flex-col items-center justify-center pt-3 pb-3 px-4 overflow-hidden">
-        {/* Meeting type pill — top-left */}
-        <span
-          className="absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-bold text-white shadow-sm"
-          style={{ backgroundColor: typeColor }}
-        >
-          <TypeIcon className="h-3.5 w-3.5" />
-          {typeLabel}
-        </span>
-        {/* Meeting image — barely-there ghost texture */}
+      {/* ── Hero section ── */}
+      {/*
+        pt-11 (44px) pushes the avatar below the badge row.
+        Badge row sits at top-3 (12px) and is ~26px tall → ends at ~38px.
+        Avatar starts at 44px → 6px clearance, no overlap.
+      */}
+      <div className="relative flex flex-col items-center pt-11 pb-4 overflow-hidden">
+        {/* Background: meeting image — wrapped in its own absolute container
+            so Next.js fill works reliably regardless of parent flex layout */}
         {meetingImg && (
-          <Image
-            src={meetingImg}
-            alt=""
-            fill
-            aria-hidden
-            className="object-cover opacity-[0.1] transition-transform duration-500 group-hover:scale-110"
-            unoptimized
-            onError={() => setImgError(true)}
-          />
+          <div className="absolute inset-0">
+            <Image
+              src={meetingImg}
+              alt=""
+              fill
+              aria-hidden
+              className="object-cover opacity-[0.1] transition-transform duration-500 group-hover:scale-110"
+              unoptimized
+              onError={() => setImgError(true)}
+            />
+          </div>
         )}
-        {/* Accent color wash — very subtle tint */}
+
+        {/* Accent color wash */}
         <div
           className="absolute inset-0"
           style={{
-            background: `linear-gradient(160deg, ${accentColor}18 0%, ${accentColor}08 100%)`,
+            background: `linear-gradient(160deg, ${accentColor}20 20%, ${accentColor}08 100%)`,
           }}
         />
 
-        {/* Host avatar — primary visual focus */}
-        <div className="relative z-10 w-24 h-24 rounded-full overflow-hidden border-[3px] border-surface shadow-md bg-surface-2">
+        {/* Badge row: type pill (left) + category (right)
+            max-w prevents either badge from ever overlapping the other */}
+        <div className="absolute top-3 left-3 right-3 z-10 flex items-start justify-between gap-2">
+          <span
+            className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm max-w-[55%]"
+            style={{ backgroundColor: typeColor }}
+          >
+            <TypeIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{typeLabel}</span>
+          </span>
+          {meeting.category && (
+            <span
+              className="inline-flex items-center rounded-lg px-2 py-1 text-[10px] font-semibold text-white/90 max-w-[40%]"
+              style={{ backgroundColor: `${accentColor}aa` }}
+            >
+              <span className="truncate">{meeting.category.name}</span>
+            </span>
+          )}
+        </div>
+
+        {/* Host avatar */}
+        <div className="relative z-10 w-24 h-24 rounded-full overflow-hidden border-[3px] border-surface shadow-md bg-surface-2 shrink-0">
           {hostImg ? (
             <Image
               src={hostImg}
@@ -99,23 +120,23 @@ export default function MeetingCard({
             />
           ) : (
             <div
-              className="flex h-full w-full items-center justify-center text-xl font-bold text-white"
+              className="flex h-full w-full items-center justify-center text-2xl font-bold text-white"
               style={{ backgroundColor: accentColor }}
             >
-              {hostName?.[0]?.toUpperCase() ?? <User className="h-12 w-12" />}
+              {hostName?.[0]?.toUpperCase() ?? <User className="h-8 w-8" />}
             </div>
           )}
         </div>
       </div>
 
       {/* ── Body: title, hours, actions ── */}
-      <div className="flex flex-col gap-2.5 px-4 pb-4 pt-4">
-        {/* Meeting title */}
+      <div className="flex flex-col gap-2.5 px-4 pb-4 pt-3">
+        {/* Title */}
         <h3 className="text-sm font-bold text-text leading-snug line-clamp-2 text-center">
           {title}
         </h3>
 
-        {/* Hours — given clear visual weight */}
+        {/* Hours */}
         {meeting.hours && (
           <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2">
             <Clock
@@ -128,7 +149,7 @@ export default function MeetingCard({
           </div>
         )}
 
-        {/* Action row: view notes (if any) + book button */}
+        {/* Actions: items-stretch + h-9 ensures both buttons are exactly 36px tall */}
         <div className="flex items-stretch gap-2 h-9">
           {onViewNotes && (
             <div

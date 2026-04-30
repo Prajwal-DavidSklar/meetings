@@ -36,14 +36,14 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+      <div className="mx-auto flex h-16 max-w-[80%] items-center justify-between px-4 sm:px-6">
         {/* Logo */}
         <Link href="/portal" className="flex items-center gap-2 group">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shadow-sm group-hover:shadow-md group-hover:bg-primary-hover transition-all">
             <CalendarDays className="h-4 w-4 text-white" />
           </div>
           <span className="font-bold text-text hidden sm:block">
-            Meetings Portal
+            Bookings Portal
           </span>
         </Link>
 

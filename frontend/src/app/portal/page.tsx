@@ -26,7 +26,6 @@ function getMeetingType(meeting: MeetingLink): "teams" | "phone" | "in-person" {
   return "in-person";
 }
 
-
 export default function PortalPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [hosts, setHosts] = useState<MeetingHost[]>([]);
@@ -116,7 +115,7 @@ export default function PortalPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6">
+    <div className="mx-auto max-w-[80%] px-4 sm:px-6 py-6">
       {/* Top bar */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1">
@@ -259,7 +258,7 @@ export default function PortalPage() {
               <p className="mb-4 text-sm text-text-muted">
                 {filtered.length} meeting{filtered.length !== 1 ? "s" : ""}
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filtered.map((meeting) => (
                   <motion.div
                     key={meeting.id}
@@ -322,11 +321,16 @@ export default function PortalPage() {
 function SkeletonCard() {
   return (
     <div className="rounded-2xl border border-border bg-surface overflow-hidden animate-pulse">
-      <div className="aspect-video bg-surface-2" />
-      <div className="p-4 flex flex-col gap-2">
-        <div className="h-4 w-3/4 rounded-full bg-surface-2" />
-        <div className="h-3 w-1/2 rounded-full bg-surface-2" />
-        <div className="h-8 w-full rounded-xl bg-surface-2 mt-1" />
+      {/* Hero placeholder */}
+      <div className="flex flex-col items-center pt-7 pb-5 px-4 bg-surface-2/50">
+        <div className="w-18 h-18 rounded-full bg-surface-2" />
+        <div className="mt-2.5 h-3.5 w-24 rounded-full bg-surface-2" />
+      </div>
+      {/* Body placeholder */}
+      <div className="flex flex-col gap-2.5 px-4 pb-4">
+        <div className="h-3.5 w-3/4 rounded-full bg-surface-2 mx-auto" />
+        <div className="h-9 rounded-xl bg-surface-2" />
+        <div className="h-9 rounded-xl bg-surface-2" />
       </div>
     </div>
   );

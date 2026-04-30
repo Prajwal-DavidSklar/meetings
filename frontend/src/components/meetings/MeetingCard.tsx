@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Calendar, User } from "lucide-react";
+import { User, Clock, MapPin, Video, Phone } from "lucide-react";
 import type { MeetingLink } from "@/lib/types";
 import { assetUrl } from "@/lib/api";
 
@@ -13,120 +13,146 @@ interface MeetingCardProps {
   onViewNotes?: () => void;
 }
 
-export default function MeetingCard({ meeting, onClick, onViewNotes }: MeetingCardProps) {
+function getMeetingType(meeting: MeetingLink): "teams" | "phone" | "in-person" {
+  const name = (meeting.display_name ?? meeting.name).toLowerCase();
+  if (name.includes("teams")) return "teams";
+  if (name.includes("phone")) return "phone";
+  return "in-person";
+}
+
+const TYPE_META = {
+  teams: { label: "Teams", Icon: Video, color: "#7B83EB" },
+  phone: { label: "Phone", Icon: Phone, color: "#91048f" },
+  "in-person": { label: "In-person", Icon: MapPin, color: "#b45309" },
+} satisfies Record<
+  string,
+  { label: string; Icon: React.ElementType; color: string }
+>;
+
+export default function MeetingCard({
+  meeting,
+  onClick,
+  onViewNotes,
+}: MeetingCardProps) {
   const [imgError, setImgError] = useState(false);
+  const [hostImgError, setHostImgError] = useState(false);
 
   const title = meeting.display_name ?? meeting.name;
   const hostName = meeting.host?.display_name ?? meeting.host?.name ?? null;
   const meetingImg = !imgError ? assetUrl(meeting.image_path) : null;
-  const hostImg = assetUrl(meeting.host?.image_path);
-  const categoryColor = meeting.category?.color ?? "#01467f";
+  const hostImg = !hostImgError ? assetUrl(meeting.host?.image_path) : null;
+  const accentColor = meeting.category?.color ?? "#01467f";
+  const {
+    label: typeLabel,
+    Icon: TypeIcon,
+    color: typeColor,
+  } = TYPE_META[getMeetingType(meeting)];
 
   return (
     <motion.button
       onClick={onClick}
-      className="group relative flex flex-col rounded-2xl border border-border bg-surface overflow-hidden text-left w-full transition-shadow hover:shadow-xl hover:shadow-black/10"
+      className="group flex flex-col rounded-2xl border border-border bg-surface overflow-hidden text-left w-full hover:shadow-lg hover:shadow-black/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-shadow"
       whileHover={{ y: -3 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
     >
-      {/* Image / placeholder */}
-      <div className="relative aspect-video w-full overflow-hidden bg-surface-2">
-        {meetingImg ? (
+      {/* ── Hero: host photo as the dominant element ── */}
+      <div className="relative flex flex-col items-center justify-center pt-3 pb-3 px-4 overflow-hidden">
+        {/* Meeting type pill — top-left */}
+        <span
+          className="absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-bold text-white shadow-sm"
+          style={{ backgroundColor: typeColor }}
+        >
+          <TypeIcon className="h-3.5 w-3.5" />
+          {typeLabel}
+        </span>
+        {/* Meeting image — barely-there ghost texture */}
+        {meetingImg && (
           <Image
             src={meetingImg}
-            alt={title}
+            alt=""
             fill
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            aria-hidden
+            className="object-cover opacity-[0.1] transition-transform duration-500 group-hover:scale-110"
             unoptimized
             onError={() => setImgError(true)}
           />
-        ) : (
-          <div
-            className="absolute inset-0 flex items-center justify-center"
-            style={{
-              background: `linear-gradient(135deg, ${categoryColor}22, ${categoryColor}44)`,
-            }}
-          >
-            <Calendar
-              className="h-10 w-10 opacity-30"
-              style={{ color: categoryColor }}
+        )}
+        {/* Accent color wash — very subtle tint */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(160deg, ${accentColor}18 0%, ${accentColor}08 100%)`,
+          }}
+        />
+
+        {/* Host avatar — primary visual focus */}
+        <div className="relative z-10 w-24 h-24 rounded-full overflow-hidden border-[3px] border-surface shadow-md bg-surface-2">
+          {hostImg ? (
+            <Image
+              src={hostImg}
+              alt={hostName ?? "Host"}
+              fill
+              className="object-cover"
+              unoptimized
+              onError={() => setHostImgError(true)}
             />
-          </div>
-        )}
-
-        {/* Host avatar overlay */}
-        {meeting.host && (
-          <div className="absolute bottom-2 right-2">
-            <div className="h-19 w-19 rounded-full border-2 border-white/80 bg-surface overflow-hidden shadow-md">
-              {hostImg ? (
-                <Image
-                  src={hostImg}
-                  alt={hostName ?? "Host"}
-                  fill
-                  className="object-cover rounded-full"
-                  unoptimized
-                />
-              ) : (
-                <div
-                  className="flex h-full w-full items-center justify-center text-xs font-bold text-white"
-                  style={{ backgroundColor: categoryColor }}
-                >
-                  {hostName?.[0]?.toUpperCase() ?? <User className="h-4 w-4" />}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Category badge */}
-        {meeting.category && (
-          <div className="absolute top-2 left-2">
-            <span
-              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
-              style={{ backgroundColor: categoryColor }}
+          ) : (
+            <div
+              className="flex h-full w-full items-center justify-center text-xl font-bold text-white"
+              style={{ backgroundColor: accentColor }}
             >
-              {meeting.category.name}
+              {hostName?.[0]?.toUpperCase() ?? <User className="h-12 w-12" />}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Body: title, hours, actions ── */}
+      <div className="flex flex-col gap-2.5 px-4 pb-4 pt-4">
+        {/* Meeting title */}
+        <h3 className="text-sm font-bold text-text leading-snug line-clamp-2 text-center">
+          {title}
+        </h3>
+
+        {/* Hours — given clear visual weight */}
+        {meeting.hours && (
+          <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2">
+            <Clock
+              className="h-3.5 w-3.5 shrink-0"
+              style={{ color: accentColor }}
+            />
+            <span className="text-xs font-semibold text-text truncate leading-none">
+              {meeting.hours}
             </span>
           </div>
         )}
-      </div>
 
-      {/* Content */}
-      <div className="flex flex-1 flex-col gap-1.5 p-4">
-        <h3 className="font-semibold text-text leading-snug line-clamp-2 group-hover:text-primary transition-colors dark:group-hover:text-white">
-          {title}
-        </h3>
-        {hostName && (
-          <p className="text-xs text-text-muted flex items-center gap-1">
-            <User className="h-3 w-3" />
-            {hostName}
-          </p>
-        )}
-      </div>
-
-      {/* CTA — hours overlays the buttons at rest; buttons reveal on hover */}
-      <div className="px-4 pb-4">
-        <div className="relative flex gap-2">
-          {meeting.hours && (
-            <div className="absolute inset-0 flex items-center bg-surface transition-opacity duration-200 group-hover:opacity-0 pointer-events-none z-10">
-              <p className="text-xs font-semibold text-red-500 line-clamp-1">
-                {meeting.hours}
-              </p>
-            </div>
-          )}
-          {meeting.notes && onViewNotes && (
+        {/* Action row: view notes (if any) + book button */}
+        <div className="flex items-stretch gap-2 h-9">
+          {onViewNotes && (
             <div
               role="button"
               tabIndex={0}
-              onClick={(e) => { e.stopPropagation(); onViewNotes(); }}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onViewNotes(); } }}
-              className="flex-1 flex items-center justify-center rounded-xl border border-border px-3 py-2 text-sm font-semibold text-text-muted opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-2 hover:text-text cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewNotes();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  onViewNotes();
+                }
+              }}
+              className="flex-1 flex items-center justify-center rounded-xl border border-border text-xs font-semibold text-text-muted hover:text-text hover:bg-surface-2 transition-colors cursor-pointer"
             >
               View Notes
             </div>
           )}
-          <div className={`${meeting.notes && onViewNotes ? "flex-1" : "w-full"} flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white opacity-0 group-hover:opacity-100 transition-opacity`}>
+          <div
+            className={`${onViewNotes ? "flex-1" : "w-full"} flex items-center justify-center rounded-xl text-xs font-bold text-white`}
+            style={{ backgroundColor: accentColor }}
+          >
             Book Meeting
           </div>
         </div>

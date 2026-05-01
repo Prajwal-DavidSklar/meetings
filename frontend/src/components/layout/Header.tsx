@@ -12,6 +12,8 @@ import {
   X,
   ChevronDown,
   ShieldCheck,
+  UserPlus,
+  Phone,
 } from "lucide-react";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,6 +26,16 @@ export default function Header() {
 
   const navLinks = [
     { href: "/portal", label: "Portal", icon: CalendarDays },
+    {
+      href: "/live-call/",
+      label: "Live Call",
+      icon: Phone,
+    },
+    {
+      href: "/new-contact/",
+      label: "New Contact",
+      icon: UserPlus,
+    },
     ...(isAdmin
       ? [{ href: "/admin", label: "Admin", icon: LayoutDashboard }]
       : []),

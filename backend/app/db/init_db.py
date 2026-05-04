@@ -20,6 +20,11 @@ def _apply_migrations() -> None:
                 conn.execute(text("ALTER TABLE meeting_links ADD COLUMN hours TEXT"))
                 conn.commit()
             logger.info("Migration: added 'hours' column to meeting_links")
+        if "hubspot_active" not in cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE meeting_links ADD COLUMN hubspot_active BOOLEAN NOT NULL DEFAULT 1"))
+                conn.commit()
+            logger.info("Migration: added 'hubspot_active' column to meeting_links")
     except Exception as e:
         logger.warning("Migration check failed: %s", e)
 

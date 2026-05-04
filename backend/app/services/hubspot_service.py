@@ -236,7 +236,7 @@ def sync_meeting_links(
                 existing.url = link_url
                 existing.slug = link_slug
                 existing.link_type = link_type
-                existing.is_active = True
+                existing.hubspot_active = True
                 existing.last_synced_at = now
 
                 # Respect admin host override
@@ -267,12 +267,12 @@ def sync_meeting_links(
                 .filter(
                     MeetingLink.hubspot_link_id.isnot(None),
                     MeetingLink.hubspot_link_id.notin_(seen_ids),
-                    MeetingLink.is_active.is_(True),
+                    MeetingLink.hubspot_active.is_(True),
                 )
                 .all()
             )
             for link in gone:
-                link.is_active = False
+                link.hubspot_active = False
                 deactivated += 1
 
         sync_log.status = "success"

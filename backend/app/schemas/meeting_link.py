@@ -11,7 +11,7 @@ class MeetingLinkCreate(BaseModel):
     display_name: Optional[str] = None
     category_id: Optional[int] = None
     host_id: Optional[int] = None
-    sort_order: int = 1
+    sort_order: int = 0
     notes: Optional[str] = None
     hours: Optional[str] = None
 
@@ -44,6 +44,7 @@ class MeetingLinkResponse(BaseModel):
     notes: Optional[str] = None
     hours: Optional[str] = None
     is_active: bool
+    hubspot_active: bool
     sort_order: int
     last_synced_at: Optional[datetime] = None
     created_at: datetime

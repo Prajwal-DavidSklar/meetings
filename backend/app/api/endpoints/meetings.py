@@ -55,7 +55,7 @@ def list_meetings(
     q = db.query(MeetingLink)
 
     if not include_inactive:
-        q = q.filter(MeetingLink.is_active.is_(True))
+        q = q.filter(MeetingLink.is_active.is_(True), MeetingLink.hubspot_active.is_(True))
     if category_id is not None:
         q = q.filter(MeetingLink.category_id == category_id)
     if host_id is not None:

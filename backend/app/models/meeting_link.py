@@ -28,8 +28,9 @@ class MeetingLink(Base):
     notes = Column(Text, nullable=True)                # Admin-authored notes shown to users
     hours = Column(Text, nullable=True)                # Admin-authored hours shown on meeting card
 
-    is_active = Column(Boolean, default=True, nullable=False)
-    sort_order = Column(Integer, default=1, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)   # admin show/hide
+    hubspot_active = Column(Boolean, default=True, nullable=False)  # False = absent from HubSpot; always True for manual links
+    sort_order = Column(Integer, default=0, nullable=False)
 
     last_synced_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())

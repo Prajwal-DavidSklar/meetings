@@ -25,6 +25,11 @@ def _apply_migrations() -> None:
                 conn.execute(text("ALTER TABLE meeting_links ADD COLUMN hubspot_active BOOLEAN NOT NULL DEFAULT 1"))
                 conn.commit()
             logger.info("Migration: added 'hubspot_active' column to meeting_links")
+        if "secondary_host_id" not in cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE meeting_links ADD COLUMN secondary_host_id INTEGER REFERENCES meeting_hosts(id)"))
+                conn.commit()
+            logger.info("Migration: added 'secondary_host_id' column to meeting_links")
     except Exception as e:
         logger.warning("Migration check failed: %s", e)
 
@@ -40,11 +45,12 @@ async def init_db() -> None:
     logger.info("Database path: %s", settings.DATABASE_PATH)
 
     # Import all models so SQLAlchemy registers them before create_all
-    import app.models.user          # noqa: F401
-    import app.models.category      # noqa: F401
-    import app.models.meeting_host  # noqa: F401
-    import app.models.meeting_link  # noqa: F401
-    import app.models.sync_log      # noqa: F401
+    import app.models.user             # noqa: F401
+    import app.models.category         # noqa: F401
+    import app.models.meeting_host     # noqa: F401
+    import app.models.meeting_link     # noqa: F401
+    import app.models.sync_log         # noqa: F401
+    import app.models.user_permission  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created / verified successfully")

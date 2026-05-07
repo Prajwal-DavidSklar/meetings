@@ -18,4 +18,13 @@ class MeetingHost(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    meeting_links = relationship("MeetingLink", back_populates="host")
+    meeting_links = relationship(
+        "MeetingLink",
+        primaryjoin="MeetingLink.host_id == MeetingHost.id",
+        back_populates="host",
+    )
+    secondary_meeting_links = relationship(
+        "MeetingLink",
+        primaryjoin="MeetingLink.secondary_host_id == MeetingHost.id",
+        back_populates="secondary_host",
+    )

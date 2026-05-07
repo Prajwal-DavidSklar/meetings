@@ -415,7 +415,7 @@ function MeetingRow({
           </SelectField>
         </div>
 
-        {/* Host selector */}
+        {/* Primary host selector */}
         <div className="min-w-32 flex items-center gap-1">
           <SelectField
             value={String(meeting.host_id ?? "")}
@@ -446,6 +446,28 @@ function MeetingRow({
               <Unlock className="h-3.5 w-3.5" />
             )}
           </button>
+        </div>
+
+        {/* Secondary host selector */}
+        <div className="min-w-32 flex items-center gap-1">
+          <SelectField
+            value={String(meeting.secondary_host_id ?? "")}
+            onChange={(v) =>
+              v
+                ? save({ secondary_host_id: Number(v) })
+                : save({ clear_secondary_host: true })
+            }
+            placeholder="2nd Host"
+          >
+            <option value="">No 2nd host</option>
+            {hosts
+              .filter((h) => h.id !== meeting.host_id)
+              .map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.display_name ?? h.name}
+                </option>
+              ))}
+          </SelectField>
         </div>
 
         {/* Sort order */}
@@ -626,6 +648,7 @@ function CreateMeetingModal({
     display_name: "",
     category_id: "",
     host_id: "",
+    secondary_host_id: "",
     sort_order: "1",
     notes: "",
     hours: "",
@@ -660,6 +683,7 @@ function CreateMeetingModal({
         display_name: form.display_name.trim() || undefined,
         category_id: form.category_id ? Number(form.category_id) : undefined,
         host_id: form.host_id ? Number(form.host_id) : undefined,
+        secondary_host_id: form.secondary_host_id ? Number(form.secondary_host_id) : undefined,
         sort_order: Number(form.sort_order),
         notes: form.notes.trim() || undefined,
         hours: form.hours.trim() || undefined,
@@ -731,7 +755,19 @@ function CreateMeetingModal({
             </div>
           </Field>
 
-          <Field label="Host">
+          <Field label="Sort Order">
+            <input
+              value={form.sort_order}
+              onChange={(e) => set("sort_order", e.target.value)}
+              type="number"
+              className={inputCls}
+              placeholder="1"
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Primary Host">
             <div className="relative">
               <select
                 value={form.host_id}
@@ -748,17 +784,27 @@ function CreateMeetingModal({
               <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted" />
             </div>
           </Field>
-        </div>
 
-        <Field label="Sort Order">
-          <input
-            value={form.sort_order}
-            onChange={(e) => set("sort_order", e.target.value)}
-            type="number"
-            className={inputCls}
-            placeholder="1"
-          />
-        </Field>
+          <Field label="Secondary Host (optional)">
+            <div className="relative">
+              <select
+                value={form.secondary_host_id}
+                onChange={(e) => set("secondary_host_id", e.target.value)}
+                className={`${inputCls} appearance-none pr-7`}
+              >
+                <option value="">No 2nd host</option>
+                {hosts
+                  .filter((h) => !form.host_id || h.id !== Number(form.host_id))
+                  .map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.display_name ?? h.name}
+                    </option>
+                  ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted" />
+            </div>
+          </Field>
+        </div>
 
         <Field label="Notes (optional)">
           <textarea

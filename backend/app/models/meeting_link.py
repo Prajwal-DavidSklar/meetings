@@ -36,5 +36,8 @@ class MeetingLink(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
+    secondary_host_id = Column(Integer, ForeignKey("meeting_hosts.id"), nullable=True)
+
     category = relationship("Category", back_populates="meeting_links")
-    host = relationship("MeetingHost", back_populates="meeting_links")
+    host = relationship("MeetingHost", foreign_keys=[host_id], back_populates="meeting_links")
+    secondary_host = relationship("MeetingHost", foreign_keys=[secondary_host_id], back_populates="secondary_meeting_links")

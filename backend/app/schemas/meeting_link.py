@@ -11,6 +11,7 @@ class MeetingLinkCreate(BaseModel):
     display_name: Optional[str] = None
     category_id: Optional[int] = None
     host_id: Optional[int] = None
+    secondary_host_id: Optional[int] = None
     sort_order: int = 0
     notes: Optional[str] = None
     hours: Optional[str] = None
@@ -20,12 +21,12 @@ class MeetingLinkUpdate(BaseModel):
     display_name: Optional[str] = None
     category_id: Optional[int] = None
     host_id: Optional[int] = None
+    secondary_host_id: Optional[int] = None
+    clear_secondary_host: Optional[bool] = None  # Set True to remove secondary host
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
     notes: Optional[str] = None
     hours: Optional[str] = None
-    # Passing host_id automatically locks host_override; expose a flag so admin
-    # can also explicitly unlock to re-enable sync-based host assignment.
     unlock_host_override: Optional[bool] = None
 
 
@@ -39,6 +40,7 @@ class MeetingLinkResponse(BaseModel):
     link_type: Optional[str] = None
     category_id: Optional[int] = None
     host_id: Optional[int] = None
+    secondary_host_id: Optional[int] = None
     host_override_locked: bool
     image_path: Optional[str] = None
     notes: Optional[str] = None
@@ -53,6 +55,7 @@ class MeetingLinkResponse(BaseModel):
     # Nested for convenience
     category: Optional[CategoryResponse] = None
     host: Optional[MeetingHostResponse] = None
+    secondary_host: Optional[MeetingHostResponse] = None
 
     class Config:
         from_attributes = True

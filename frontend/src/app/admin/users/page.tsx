@@ -11,23 +11,27 @@ import {
   AlertCircle,
   Check,
   X,
+  KeyRound,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
-import { getUsers, createUser, updateUser, deleteUser } from "@/lib/api";
+import { getUsers, createUser, updateUser, deleteUser, getCategories, updateUserPermissions } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import type { User as UserType, UserCreate, UserRole } from "@/lib/types";
+import type { User as UserType, UserCreate, UserRole, Category } from "@/lib/types";
 
 export default function UsersPage() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState<UserType[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<UserType | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [permModalUser, setPermModalUser] = useState<UserType | null>(null);
 
   const reload = () =>
-    getUsers().then((data) => {
+    Promise.all([getUsers(), getCategories(true)]).then(([data, cats]) => {
       setUsers(data);
+      setCategories(cats);
       setLoading(false);
     });
 
@@ -177,6 +181,16 @@ export default function UsersPage() {
                         <Pencil className="h-3 w-3" />
                         Edit
                       </button>
+                      {u.role !== "admin" && (
+                        <button
+                          onClick={() => setPermModalUser(u)}
+                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-muted hover:bg-surface hover:text-primary transition-colors"
+                          title="Manage access permissions"
+                        >
+                          <KeyRound className="h-3 w-3" />
+                          Permissions
+                        </button>
+                      )}
                       {u.id !== me?.id && (
                         <button
                           onClick={() => handleToggle(u)}
@@ -207,6 +221,18 @@ export default function UsersPage() {
         error={error}
         isSelf={editing?.id === me?.id}
       />
+
+      {permModalUser && (
+        <PermissionsModal
+          user={permModalUser}
+          categories={categories}
+          onClose={() => setPermModalUser(null)}
+          onSaved={() => {
+            setPermModalUser(null);
+            reload();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -330,6 +356,209 @@ function UserModal({
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+// Nav links that can be restricted (portal is always accessible)
+const RESTRICTABLE_NAV_LINKS = [
+  { key: "live-call", label: "Live Call" },
+  { key: "new-contact", label: "New Contact" },
+] as const;
+
+function PermissionsModal({
+  user,
+  categories,
+  onClose,
+  onSaved,
+}: {
+  user: UserType;
+  categories: Category[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const existingPerm = user.permission;
+
+  const [restrictNav, setRestrictNav] = useState(
+    existingPerm?.allowed_nav_links !== null && existingPerm?.allowed_nav_links !== undefined
+  );
+  const [allowedNav, setAllowedNav] = useState<string[]>(
+    existingPerm?.allowed_nav_links ?? RESTRICTABLE_NAV_LINKS.map((l) => l.key)
+  );
+  const [restrictCats, setRestrictCats] = useState(
+    existingPerm?.allowed_category_ids !== null && existingPerm?.allowed_category_ids !== undefined
+  );
+  const [allowedCatIds, setAllowedCatIds] = useState<number[]>(
+    existingPerm?.allowed_category_ids ?? categories.map((c) => c.id)
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggleNav = (key: string) => {
+    setAllowedNav((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const toggleCat = (id: number) => {
+    setAllowedCatIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateUserPermissions(user.id, {
+        allowed_nav_links: restrictNav ? allowedNav : null,
+        allowed_category_ids: restrictCats ? allowedCatIds : null,
+      });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save permissions");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Permissions — ${user.name}`}
+      size="sm"
+    >
+      <div className="p-6 flex flex-col gap-5">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-error-bg px-3 py-2 text-sm text-error">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        {/* Nav Links */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+              Nav Links
+            </span>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <span className="text-xs text-text-muted">Restrict access</span>
+              <button
+                type="button"
+                onClick={() => setRestrictNav((v) => !v)}
+                className={`relative h-5 w-9 rounded-full transition-colors ${
+                  restrictNav ? "bg-primary" : "bg-border"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    restrictNav ? "translate-x-4" : ""
+                  }`}
+                />
+              </button>
+            </label>
+          </div>
+
+          {restrictNav ? (
+            <div className="flex flex-col gap-2 pl-2">
+              {RESTRICTABLE_NAV_LINKS.map(({ key, label }) => (
+                <label key={key} className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowedNav.includes(key)}
+                    onChange={() => toggleNav(key)}
+                    className="h-4 w-4 rounded border-border accent-primary"
+                  />
+                  <span className="text-sm text-text">{label}</span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-text-muted pl-2">
+              User can access all nav links.
+            </p>
+          )}
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Categories */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+              Categories
+            </span>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <span className="text-xs text-text-muted">Restrict access</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!restrictCats) {
+                    // Pre-select all categories when enabling restriction
+                    setAllowedCatIds(categories.map((c) => c.id));
+                  }
+                  setRestrictCats((v) => !v);
+                }}
+                className={`relative h-5 w-9 rounded-full transition-colors ${
+                  restrictCats ? "bg-primary" : "bg-border"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    restrictCats ? "translate-x-4" : ""
+                  }`}
+                />
+              </button>
+            </label>
+          </div>
+
+          {restrictCats ? (
+            <div className="flex flex-col gap-2 pl-2 max-h-48 overflow-y-auto">
+              {categories.map((cat) => (
+                <label key={cat.id} className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowedCatIds.includes(cat.id)}
+                    onChange={() => toggleCat(cat.id)}
+                    className="h-4 w-4 rounded border-border accent-primary"
+                  />
+                  <span className="flex items-center gap-2 text-sm text-text">
+                    {cat.color && (
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                    )}
+                    {cat.name}
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-text-muted pl-2">
+              User can access all categories and their meetings.
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-text-muted hover:bg-surface-2 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-60 transition-colors"
+          >
+            {saving ? "Saving…" : "Save Permissions"}
+          </button>
+        </div>
+      </div>
     </Modal>
   );
 }

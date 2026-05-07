@@ -5,6 +5,8 @@ import type {
   User,
   UserCreate,
   UserUpdate,
+  UserPermission,
+  UserPermissionUpdate,
   Category,
   CategoryCreate,
   CategoryUpdate,
@@ -314,6 +316,20 @@ export async function updateUser(id: number, data: UserUpdate): Promise<User> {
 
 export async function deleteUser(id: number): Promise<void> {
   return request<void>(`/users/${id}`, { method: "DELETE" });
+}
+
+export async function getUserPermissions(userId: number): Promise<UserPermission> {
+  return request<UserPermission>(`/users/${userId}/permissions`);
+}
+
+export async function updateUserPermissions(
+  userId: number,
+  data: UserPermissionUpdate,
+): Promise<UserPermission> {
+  return request<UserPermission>(`/users/${userId}/permissions`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 }
 
 // ─── Static asset URL helper ──────────────────────────────────────────────────

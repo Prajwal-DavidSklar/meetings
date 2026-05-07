@@ -7,6 +7,7 @@ PUT  /categories/{id}      — admin only
 DELETE /categories/{id}    — admin only
 """
 import re
+import json
 import logging
 from typing import List
 
@@ -17,6 +18,7 @@ from app.api.dependencies import get_current_user, require_admin
 from app.db.database import get_db
 from app.models.category import Category
 from app.models.user import User
+from app.models.user_permission import UserPermission
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
 
 logger = logging.getLogger(__name__)
@@ -38,11 +40,19 @@ def _slugify(name: str) -> str:
 def list_categories(
     include_inactive: bool = False,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     q = db.query(Category)
     if not include_inactive:
         q = q.filter(Category.is_active.is_(True))
+
+    # Apply category access restrictions for non-admin users
+    if current_user.role != "admin":
+        perm = db.query(UserPermission).filter(UserPermission.user_id == current_user.id).first()
+        if perm and perm.allowed_category_ids is not None:
+            allowed_ids = json.loads(perm.allowed_category_ids)
+            q = q.filter(Category.id.in_(allowed_ids))
+
     return q.order_by(Category.sort_order, Category.name).all()
 
 

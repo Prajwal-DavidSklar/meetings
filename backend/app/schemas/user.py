@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
+from app.schemas.user_permission import UserPermissionData
 
 
 class UserCreate(BaseModel):
@@ -27,6 +28,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     created_by_id: Optional[int] = None
+    permission: Optional[UserPermissionData] = None
 
     class Config:
         from_attributes = True

@@ -12,6 +12,7 @@ DELETE /meetings/{id}/image       — admin: remove thumbnail
 POST /meetings/sync               — admin: trigger HubSpot sync
 GET  /meetings/sync/logs          — admin: sync history
 """
+import json
 import logging
 import os
 import uuid
@@ -27,6 +28,7 @@ from app.db.database import get_db
 from app.models.meeting_link import MeetingLink
 from app.models.sync_log import SyncLog
 from app.models.user import User
+from app.models.user_permission import UserPermission
 from app.schemas.meeting_link import MeetingLinkCreate, MeetingLinkResponse, MeetingLinkUpdate, SyncLogResponse
 from app.services.hubspot_service import sync_meeting_links
 
@@ -50,7 +52,7 @@ def list_meetings(
     skip: int = 0,
     limit: int = 200,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     q = db.query(MeetingLink)
 
@@ -65,6 +67,14 @@ def list_meetings(
         q = q.filter(
             MeetingLink.name.ilike(term) | MeetingLink.display_name.ilike(term)
         )
+
+    # Apply category access restrictions for non-admin users
+    if current_user.role != "admin":
+        perm = db.query(UserPermission).filter(UserPermission.user_id == current_user.id).first()
+        if perm and perm.allowed_category_ids is not None:
+            allowed_ids = json.loads(perm.allowed_category_ids)
+            # Show meetings in allowed categories; meetings with no category are also hidden
+            q = q.filter(MeetingLink.category_id.in_(allowed_ids))
 
     return (
         q.order_by(MeetingLink.sort_order, MeetingLink.name)
@@ -90,6 +100,7 @@ def create_meeting(
         display_name=body.display_name or None,
         category_id=body.category_id,
         host_id=body.host_id,
+        secondary_host_id=body.secondary_host_id,
         sort_order=body.sort_order,
         notes=body.notes or None,
         hours=body.hours or None,
@@ -141,6 +152,12 @@ def update_meeting(
     if body.host_id is not None:
         link.host_id = body.host_id
         link.host_override_locked = True   # auto-lock so sync won't override
+
+    if body.secondary_host_id is not None:
+        link.secondary_host_id = body.secondary_host_id
+
+    if body.clear_secondary_host:
+        link.secondary_host_id = None
 
     if body.unlock_host_override is not None:
         link.host_override_locked = not body.unlock_host_override

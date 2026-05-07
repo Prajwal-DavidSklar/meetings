@@ -36,11 +36,15 @@ export default function MeetingCard({
 }: MeetingCardProps) {
   const [imgError, setImgError] = useState(false);
   const [hostImgError, setHostImgError] = useState(false);
+  const [secondaryHostImgError, setSecondaryHostImgError] = useState(false);
 
   const title = meeting.display_name ?? meeting.name;
   const hostName = meeting.host?.display_name ?? meeting.host?.name ?? null;
+  const secondaryHostName = meeting.secondary_host?.display_name ?? meeting.secondary_host?.name ?? null;
+  const hasSecondaryHost = !!meeting.secondary_host;
   const meetingImg = !imgError ? assetUrl(meeting.image_path) : null;
   const hostImg = !hostImgError ? assetUrl(meeting.host?.image_path) : null;
+  const secondaryHostImg = !secondaryHostImgError ? assetUrl(meeting.secondary_host?.image_path) : null;
   const accentColor = meeting.category?.color ?? "#01467f";
   const {
     label: typeLabel,
@@ -107,23 +111,53 @@ export default function MeetingCard({
           )}
         </div>
 
-        {/* Host avatar */}
-        <div className="relative z-10 w-24 h-24 rounded-full overflow-hidden border-[3px] border-surface shadow-md bg-surface-2 shrink-0">
-          {hostImg ? (
-            <Image
-              src={hostImg}
-              alt={hostName ?? "Host"}
-              fill
-              className="object-cover"
-              unoptimized
-              onError={() => setHostImgError(true)}
-            />
-          ) : (
-            <div
-              className="flex h-full w-full items-center justify-center text-2xl font-bold text-white"
-              style={{ backgroundColor: accentColor }}
-            >
-              {hostName?.[0]?.toUpperCase() ?? <User className="h-8 w-8" />}
+        {/* Host avatar(s) — single large circle or two overlapping circles */}
+        <div className="relative z-10 flex items-center justify-center">
+          {/* Primary host */}
+          <div
+            className={`relative rounded-full overflow-hidden border-[3px] border-surface shadow-md bg-surface-2 shrink-0 ${
+              hasSecondaryHost ? "w-20 h-20 z-10" : "w-24 h-24"
+            }`}
+          >
+            {hostImg ? (
+              <Image
+                src={hostImg}
+                alt={hostName ?? "Host"}
+                fill
+                className="object-cover"
+                unoptimized
+                onError={() => setHostImgError(true)}
+              />
+            ) : (
+              <div
+                className="flex h-full w-full items-center justify-center text-2xl font-bold text-white"
+                style={{ backgroundColor: accentColor }}
+              >
+                {hostName?.[0]?.toUpperCase() ?? <User className="h-7 w-7" />}
+              </div>
+            )}
+          </div>
+
+          {/* Secondary host — smaller, overlapping to the right */}
+          {hasSecondaryHost && (
+            <div className="relative w-14 h-14 -ml-4 rounded-full overflow-hidden border-[3px] border-surface shadow-md bg-surface-2 shrink-0 z-20">
+              {secondaryHostImg ? (
+                <Image
+                  src={secondaryHostImg}
+                  alt={secondaryHostName ?? "Co-host"}
+                  fill
+                  className="object-cover"
+                  unoptimized
+                  onError={() => setSecondaryHostImgError(true)}
+                />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center text-base font-bold text-white"
+                  style={{ backgroundColor: `${accentColor}cc` }}
+                >
+                  {secondaryHostName?.[0]?.toUpperCase() ?? <User className="h-5 w-5" />}
+                </div>
+              )}
             </div>
           )}
         </div>

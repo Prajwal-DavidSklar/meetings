@@ -22,3 +22,5 @@ class User(Base):
     created_by = relationship("User", remote_side=[id], foreign_keys=[created_by_id])
     # Sync logs triggered by this user
     sync_logs = relationship("SyncLog", back_populates="triggered_by")
+    # Optional per-user access permissions
+    permission = relationship("UserPermission", back_populates="user", uselist=False)

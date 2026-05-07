@@ -7,17 +7,20 @@ Admin can:
   - Update user details / role / active status
   - Soft-delete (deactivate) users
 """
+import json
 import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_current_user, require_admin
 from app.core.security import get_password_hash
 from app.db.database import get_db
 from app.models.user import User
+from app.models.user_permission import UserPermission
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.user_permission import UserPermissionUpdate, UserPermissionResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -34,7 +37,13 @@ def list_users(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return db.query(User).offset(skip).limit(limit).all()
+    return (
+        db.query(User)
+        .options(joinedload(User.permission))
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -158,3 +167,59 @@ def delete_user(
 
     user.is_active = False
     db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Permissions (admin only)
+# ---------------------------------------------------------------------------
+
+@router.get("/{user_id}/permissions", response_model=UserPermissionResponse, summary="Get user permissions")
+def get_user_permissions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    perm = db.query(UserPermission).filter(UserPermission.user_id == user_id).first()
+    if not perm:
+        return UserPermissionResponse(user_id=user_id)
+
+    return UserPermissionResponse(
+        user_id=user_id,
+        allowed_nav_links=json.loads(perm.allowed_nav_links) if perm.allowed_nav_links is not None else None,
+        allowed_category_ids=json.loads(perm.allowed_category_ids) if perm.allowed_category_ids is not None else None,
+    )
+
+
+@router.put("/{user_id}/permissions", response_model=UserPermissionResponse, summary="Update user permissions")
+def update_user_permissions(
+    user_id: int,
+    body: UserPermissionUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    perm = db.query(UserPermission).filter(UserPermission.user_id == user_id).first()
+    if not perm:
+        perm = UserPermission(user_id=user_id)
+        db.add(perm)
+
+    perm.allowed_nav_links = (
+        json.dumps(body.allowed_nav_links) if body.allowed_nav_links is not None else None
+    )
+    perm.allowed_category_ids = (
+        json.dumps(body.allowed_category_ids) if body.allowed_category_ids is not None else None
+    )
+    db.commit()
+
+    return UserPermissionResponse(
+        user_id=user_id,
+        allowed_nav_links=body.allowed_nav_links,
+        allowed_category_ids=body.allowed_category_ids,
+    )

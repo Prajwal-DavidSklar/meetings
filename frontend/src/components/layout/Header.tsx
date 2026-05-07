@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,28 +18,37 @@ import {
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Nav link keys must match the path segment used in UserPermission.allowed_nav_links
+const ALL_NAV_LINKS = [
+  { href: "/portal", label: "Portal", icon: CalendarDays, key: "portal" },
+  { href: "/live-call/", label: "Live Call", icon: Phone, key: "live-call" },
+  { href: "/new-contact/", label: "New Contact", icon: UserPlus, key: "new-contact" },
+] as const;
+
 export default function Header() {
   const { user, isAdmin, logout } = useAuth();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [userDropOpen, setUserDropOpen] = useState(false);
 
-  const navLinks = [
-    { href: "/portal", label: "Portal", icon: CalendarDays },
-    {
-      href: "/live-call/",
-      label: "Live Call",
-      icon: Phone,
-    },
-    {
-      href: "/new-contact/",
-      label: "New Contact",
-      icon: UserPlus,
-    },
-    ...(isAdmin
-      ? [{ href: "/admin", label: "Admin", icon: LayoutDashboard }]
-      : []),
-  ];
+  const navLinks = useMemo(() => {
+    const baseLinks = ALL_NAV_LINKS.filter((link) => {
+      // Portal is always visible
+      if (link.key === "portal") return true;
+      // Admins see everything
+      if (isAdmin) return true;
+      // No permission record → full access
+      const perms = user?.permission?.allowed_nav_links;
+      if (perms === null || perms === undefined) return true;
+      return perms.includes(link.key);
+    });
+
+    // Admin link is separate — only shown to admins
+    if (isAdmin) {
+      return [...baseLinks, { href: "/admin", label: "Admin", icon: LayoutDashboard, key: "admin" }];
+    }
+    return baseLinks;
+  }, [isAdmin, user?.permission?.allowed_nav_links]);
 
   const isActive = (href: string) =>
     href === "/portal"

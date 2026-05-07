@@ -20,6 +20,16 @@ export interface MicrosoftLoginResponse {
 
 export type UserRole = "admin" | "user";
 
+export interface UserPermission {
+  allowed_nav_links: string[] | null;   // null = no restriction
+  allowed_category_ids: number[] | null; // null = no restriction
+}
+
+export interface UserPermissionUpdate {
+  allowed_nav_links: string[] | null;
+  allowed_category_ids: number[] | null;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -29,6 +39,7 @@ export interface User {
   microsoft_id: string | null;
   created_at: string;
   updated_at: string;
+  permission: UserPermission | null;
 }
 
 export interface UserCreate {
@@ -114,6 +125,7 @@ export interface MeetingLink {
   display_name: string | null;
   category_id: number | null;
   host_id: number | null;
+  secondary_host_id: number | null;
   host_override_locked: boolean;
   image_path: string | null;
   notes: string | null;
@@ -125,6 +137,7 @@ export interface MeetingLink {
   updated_at: string;
   category: Category | null;
   host: MeetingHost | null;
+  secondary_host: MeetingHost | null;
 }
 
 export interface MeetingLinkCreate {
@@ -133,6 +146,7 @@ export interface MeetingLinkCreate {
   display_name?: string;
   category_id?: number | null;
   host_id?: number | null;
+  secondary_host_id?: number | null;
   sort_order?: number;
   notes?: string;
   hours?: string;
@@ -142,6 +156,8 @@ export interface MeetingLinkUpdate {
   display_name?: string;
   category_id?: number | null;
   host_id?: number | null;
+  secondary_host_id?: number | null;
+  clear_secondary_host?: boolean;
   sort_order?: number;
   is_active?: boolean;
   notes?: string;

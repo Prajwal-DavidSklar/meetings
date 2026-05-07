@@ -12,7 +12,7 @@ import logging
 
 import msal
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import (
     verify_password,
@@ -200,5 +200,13 @@ def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.get("/me", response_model=UserResponse, summary="Get current user profile")
-def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+def get_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(User)
+        .options(joinedload(User.permission))
+        .filter(User.id == current_user.id)
+        .first()
+    )

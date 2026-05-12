@@ -50,7 +50,7 @@ def list_meetings(
     search: Optional[str] = None,
     include_inactive: bool = False,
     skip: int = 0,
-    limit: int = 200,
+    limit: int = 2000,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

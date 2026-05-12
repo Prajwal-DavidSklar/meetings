@@ -42,7 +42,7 @@ export default function PortalPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    Promise.all([getCategories(), getHosts(), getMeetings()]).then(
+    Promise.all([getCategories(), getHosts(), getMeetings({ limit: 2000 })]).then(
       ([cats, hs, ms]) => {
         setCategories(cats);
         setHosts(hs);
